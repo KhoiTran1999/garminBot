@@ -20,13 +20,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install garminconnect google-generativeai python-telegram-bot python-dotenv
+          pip install garminconnect google-genai python-telegram-bot python-dotenv
 
-      - name: Run AI Coach
+      - name: Run AI Coach Multi-User
         env:
-          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
-          GARMIN_PASS: ${{ secrets.GARMIN_PASS }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # Truyền danh sách user vào biến môi trường
+          USERS_JSON: ${{ secrets.USERS_JSON }}
+          # Truyền các key dùng chung
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python main.py
