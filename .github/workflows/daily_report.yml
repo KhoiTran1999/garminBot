@@ -1,0 +1,32 @@
+name: Daily Garmin Report
+
+on:
+  schedule:
+    # Chạy vào 7:00 sáng giờ VN (UTC+7) -> Tức là 0:00 UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Cho phép bấm chạy thủ công để test
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install garminconnect google-generativeai python-telegram-bot python-dotenv
+
+      - name: Run AI Coach
+        env:
+          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
+          GARMIN_PASS: ${{ secrets.GARMIN_PASS }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python main.py
