@@ -166,8 +166,8 @@ def get_ai_advice(today, r_data, r_score, l_data, user_label="User"):
         [Nhận xét về cường độ tập luyện tuần qua. Tải này là Duy trì, Tích lũy hay Quá tải?]
 
         **🏃 BÀI TẬP ĐỀ XUẤT HÔM NAY**
-        * **Chỉ định:** [Nghỉ ngơi / Chạy nhẹ Zone 2 / Bài Interval...]
-        * **Chi tiết:** [Ví dụ: Chạy 30p pace 6:30 hoặc Nghỉ hoàn toàn]
+        **Chỉ định:** [Nghỉ ngơi / Chạy nhẹ Zone 2 / Bài Interval...]
+        **Chi tiết:** [Ví dụ: Chạy 30p pace 6:30 hoặc Nghỉ hoàn toàn]
 
         **💡 TIP PHỤC HỒI**
         [Một lời khuyên dinh cụ thể và khích lệ tinh thần cho VĐV.]
@@ -193,12 +193,25 @@ async def send_telegram_report(message, chat_id, user_label="User"):
         print(f"[{user_label}] ⚠️ Chưa cấu hình Telegram Token/ID.")
         return
 
+    bot = Bot(token=TELE_TOKEN)
+
     try:
-        bot = Bot(token=TELE_TOKEN)
+        # CÁCH 1: Thử gửi với định dạng Markdown (để tin nhắn đẹp)
         await bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
-        print(f"[{user_label}] ✅ Đã gửi thành công!")
+        print(f"[{user_label}] ✅ Đã gửi thành công (Markdown)!")
+        
     except Exception as e:
-        print(f"[{user_label}] ❌ Lỗi gửi Telegram: {e}")
+        print(f"[{user_label}] ⚠️ Lỗi format Markdown: {e}")
+        print(f"[{user_label}] 🔄 Đang chuyển sang gửi Plain Text...")
+        
+        try:
+            # CÁCH 2 (FALLBACK): Gửi plain text nếu cách 1 lỗi
+            # (Loại bỏ parse_mode để Telegram không check cú pháp)
+            await bot.send_message(chat_id=chat_id, text=message, parse_mode=None)
+            print(f"[{user_label}] ✅ Đã gửi thành công (Plain Text)!")
+            
+        except Exception as e2:
+            print(f"[{user_label}] ❌ Gửi thất bại hoàn toàn: {e2}")
 
 # ==============================================================================
 # 5. QUẢN LÝ LUỒNG ĐA NGƯỜI DÙNG (Multi-User Flow)

@@ -1,13 +1,13 @@
-name: Daily Garmin Report (5PM)
+name: Daily Reminder (4PM)
 
 on:
   schedule:
-    # Sửa thành 10:00 UTC (tức 17:00 VN)
-    - cron: '0 10 * * *' 
-  workflow_dispatch:
+    # Chạy vào 09:00 UTC (tức 16:00 VN)
+    - cron: '0 9 * * *'
+  workflow_dispatch: # Cho phép bấm chạy thử thủ công
 
 jobs:
-  run-script:
+  run-reminder:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -19,13 +19,12 @@ jobs:
           python-version: '3.9'
 
       - name: Install dependencies
-        # Cài đủ các thư viện cho main.py
         run: |
-          pip install garminconnect google-genai python-telegram-bot python-dotenv
+          pip install python-telegram-bot python-dotenv
 
-      - name: Run AI Coach Multi-User
+      - name: Send Reminders
         env:
+          # Cần 2 biến này để biết gửi cho ai
           USERS_JSON: ${{ secrets.USERS_JSON }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python main.py
+        run: python remind.py
