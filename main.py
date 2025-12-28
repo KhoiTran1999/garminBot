@@ -4,6 +4,7 @@ import json
 import asyncio
 from datetime import date, timedelta
 from dotenv import load_dotenv
+from datetime import datetime
 
 # Thư viện
 from garminconnect import Garmin
@@ -139,10 +140,13 @@ def get_ai_advice(today, r_data, r_score, l_data, user_label="User"):
         client = genai.Client(api_key=GEMINI_API_KEY)
         
         activities_text = "\n".join(l_data['raw_activities_for_ai']) if l_data['raw_activities_for_ai'] else "Không có hoạt động đáng kể."
-        
+        # Lấy thời gian hiện tại định dạng Giờ:Phút:Giây, Ngày/Tháng/Năm
+        current_now = datetime.now().strftime("%H:%M:%S, %d/%m/%Y")
+
         prompt = f"""
-        Bạn là Huấn luyện viên thể thao chuyên nghiệp (AI Running Coach). 
+        Bạn là Huấn luyện viên thể thao chuyên nghiệp (AI Running Coach).
         Hãy phân tích dữ liệu ngày {today} và đưa ra lời khuyên ngắn gọn cho VĐV tên {user_label}.
+        Đây là thời gian hiện tại: {current_now}
 
         ### 1. DỮ LIỆU SỨC KHỎE (READINESS)
         - **Điểm Sẵn sàng:** {r_score}/100 (Thang điểm: <40 Kém, 40-70 TB, >70 Tốt)
