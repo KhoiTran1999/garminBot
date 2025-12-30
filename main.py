@@ -211,7 +211,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config):
         prompt = f"""
         Bạn là Huấn luyện viên thể thao chuyên nghiệp (AI Running Coach).
         Hãy phân tích dữ liệu và đưa ra giáo án cho VĐV: {user_label}.
-        Thời gian báo cáo: {current_now}
+        Thời gian báo cáo hiện tại: {current_now}
 
         HỒ SƠ VĐV (QUAN TRỌNG):
         - **Mục tiêu hiện tại:** {goal}
