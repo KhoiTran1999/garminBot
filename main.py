@@ -213,7 +213,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config):
         Hãy phân tích dữ liệu và đưa ra giáo án cho VĐV: {user_label}.
         Thời gian báo cáo hiện tại: {current_now}
 
-        HỒ SƠ VĐV (QUAN TRỌNG):
+        HỒ SƠ VĐV:
         - **Mục tiêu hiện tại:** {goal}
         - **Tình trạng chấn thương/Bệnh lý:** {injury}
         - **Ghi chú thêm:** {note}
