@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         # Cài đủ các thư viện cho main.py
         run: |
-          pip install garminconnect google-genai python-telegram-bot python-dotenv
+          pip install -r requirements.txt
 
       - name: Run AI Coach Multi-User
         env:
