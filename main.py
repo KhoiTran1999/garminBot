@@ -5,6 +5,7 @@ import asyncio
 from datetime import date, timedelta
 from dotenv import load_dotenv
 from datetime import datetime
+import pytz
 
 # Thư viện
 from garminconnect import Garmin
@@ -140,8 +141,11 @@ def get_ai_advice(today, r_data, r_score, l_data, user_label="User"):
         client = genai.Client(api_key=GEMINI_API_KEY)
         
         activities_text = "\n".join(l_data['raw_activities_for_ai']) if l_data['raw_activities_for_ai'] else "Không có hoạt động đáng kể."
-        # Lấy thời gian hiện tại định dạng Giờ:Phút:Giây, Ngày/Tháng/Năm
-        current_now = datetime.now().strftime("%H:%M:%S, %d/%m/%Y")
+        # Định nghĩa múi giờ Việt Nam
+        vn_timezone = pytz.timezone('Asia/Ho_Chi_Minh')
+
+        # Lấy giờ hiện tại theo múi giờ VN
+        current_now = datetime.now(vn_timezone).strftime("%H:%M:%S, %d/%m/%Y")
 
         prompt = f"""
         Bạn là Huấn luyện viên thể thao chuyên nghiệp (AI Running Coach).
@@ -162,7 +166,10 @@ def get_ai_advice(today, r_data, r_score, l_data, user_label="User"):
 
         ### YÊU CẦU OUTPUT (Markdown):
         Hãy trả về báo cáo theo cấu trúc sau (dùng icon sinh động):
-        
+
+        **🔢 CÁC CHỈ SỐ HIỆN TẠI**
+        [Tổng hợp lại các chỉ số quan trọng ở trên.]
+
         **🔥 ĐÁNH GIÁ TRẠNG THÁI**
         [Tóm tắt ngắn gọn tình trạng cơ thể: Sung sức hay Mệt mỏi? Yếu tố nào đang kìm hãm (Ngủ ít/Stress/Pin thấp)?]
 
