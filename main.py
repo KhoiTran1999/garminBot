@@ -1,6 +1,5 @@
 import os
 import math
-import json
 import asyncio
 from datetime import date, timedelta, datetime
 from dotenv import load_dotenv
@@ -10,6 +9,9 @@ import pytz
 from garminconnect import Garmin
 from telegram import Bot
 from google import genai 
+
+# Import module Notion mới tạo
+from notion_db import get_users_from_notion
 
 # --- CẤU HÌNH CHUNG ---
 load_dotenv()
@@ -74,14 +76,12 @@ def get_sleep_analysis(client, date_str, user_label="User"):
     Trả về: (real_sleep_hours, sleep_description_text)
     """
     try:
-        # Gọi API lấy dữ liệu giấc ngủ chi tiết
         sleep_data = client.get_sleep_data(date_str)
         dto = sleep_data.get('dailySleepDTO', {})
         
         if not dto:
             return 0, "Không có dữ liệu giấc ngủ chi tiết (Chưa đồng bộ)."
 
-        # Lấy các thành phần (đơn vị: giây)
         deep = dto.get('deepSleepSeconds', 0)
         light = dto.get('lightSleepSeconds', 0)
         rem = dto.get('remSleepSeconds', 0)
@@ -91,7 +91,6 @@ def get_sleep_analysis(client, date_str, user_label="User"):
         real_sleep_sec = deep + light + rem
         real_sleep_hours = real_sleep_sec / 3600
 
-        # Tạo chuỗi text mô tả để gửi cho AI
         sleep_text = (
             f"Tổng ngủ thực: {seconds_to_text(real_sleep_sec)} (đã trừ lúc thức).\n"
             f"   - Ngủ sâu (Deep): {seconds_to_text(deep)}\n"
@@ -99,32 +98,22 @@ def get_sleep_analysis(client, date_str, user_label="User"):
             f"   - Ngủ mơ (REM): {seconds_to_text(rem)}\n"
             f"   - Thời gian thức: {seconds_to_text(awake)}"
         )
-        
         return real_sleep_hours, sleep_text
 
-    except AttributeError:
-        print(f"[{user_label}] ❌ Lỗi thư viện: Client không có hàm 'get_sleep_data'. Hãy chạy 'pip install --upgrade garminconnect'.")
-        return 0, "Lỗi thư viện Garmin cũ."
     except Exception as e:
         print(f"[{user_label}] ⚠️ Lỗi lấy chi tiết giấc ngủ: {e}")
         return 0, "Không lấy được chi tiết giấc ngủ."
 
 def get_processed_data(client, today, user_label="User"):
-    print(f"[{user_label}] 🔄 Đang thu thập dữ liệu từ Garmin...")
+    print(f"[{user_label}] 🔄 Đang thu thập dữ liệu Garmin...")
     
-    # Khởi tạo data
     readiness_data = {
-        "rhr": 0, 
-        "stress": 0, 
-        "body_battery": 0, 
-        "sleep_hours": 0,
-        "nap_seconds": 0,
-        "sleep_text": "Chưa có dữ liệu"
+        "rhr": 0, "stress": 0, "body_battery": 0, 
+        "sleep_hours": 0, "nap_seconds": 0, "sleep_text": "Chưa có dữ liệu"
     }
-
     date_iso = today.isoformat()
 
-    # --- A. Lấy chỉ số cơ bản (RHR, Stress, Body Battery) ---
+    # --- A. Lấy chỉ số cơ bản ---
     try:
         summary = client.get_user_summary(date_iso)
         stats = summary.get('stats', summary)
@@ -132,12 +121,10 @@ def get_processed_data(client, today, user_label="User"):
         readiness_data['rhr'] = stats.get('restingHeartRate', 0)
         readiness_data['stress'] = stats.get('averageStressLevel', 0)
         
-        # Lấy Body Battery mới nhất
         bb_val = summary.get('stats_and_body', {}).get('bodyBatteryMostRecentValue')
         if bb_val is None: bb_val = stats.get('bodyBatteryMostRecentValue', 0)
         readiness_data['body_battery'] = bb_val
         
-        # Lấy giấc ngủ ngắn (Nap) nếu có
         events = stats.get('bodyBatteryActivityEventList', [])
         if events:
             for e in events:
@@ -147,12 +134,11 @@ def get_processed_data(client, today, user_label="User"):
     except Exception as e:
         print(f"[{user_label}] ⚠️ Lỗi lấy User Summary: {e}")
 
-    # --- B. Lấy chi tiết giấc ngủ (Deep/Light/REM) ---
+    # --- B. Phân tích giấc ngủ sâu ---
     real_hours, sleep_desc = get_sleep_analysis(client, date_iso, user_label)
     readiness_data['sleep_hours'] = real_hours
     readiness_data['sleep_text'] = sleep_desc
 
-    # Tính điểm Readiness
     readiness_score = calculate_readiness_score(readiness_data)
 
     # --- C. Training Load (7 ngày) ---
@@ -164,7 +150,6 @@ def get_processed_data(client, today, user_label="User"):
         
         current_max_hr = 185
         rhr_input = readiness_data['rhr'] if readiness_data['rhr'] > 30 else 55
-        
         total_trimp = 0
         
         for act in activities:
@@ -181,10 +166,8 @@ def get_processed_data(client, today, user_label="User"):
             trimp = 0
             if avg_hr > rhr_input:
                 trimp = calculate_trimp_banister(duration_min, avg_hr, rhr_input, current_max_hr)
-            
             total_trimp += trimp
             
-            # Chỉ liệt kê các hoạt động đáng kể
             if trimp > 10: 
                 load_stats['raw_activities_for_ai'].append(
                     f"- {date_str}: {name} ({int(duration_min)}p) | MaxHR {mx_hr} | TRIMP {int(trimp)}"
@@ -194,16 +177,23 @@ def get_processed_data(client, today, user_label="User"):
         load_stats['final_calc_max_hr'] = current_max_hr
 
     except Exception as e:
-        print(f"[{user_label}] ⚠️ Lỗi lấy Activities Load: {e}")
+        print(f"[{user_label}] ⚠️ Lỗi lấy Activities: {e}")
 
     return readiness_data, readiness_score, load_stats
 
 # ==============================================================================
-# 3. MODULE AI ANALYST
+# 3. MODULE AI ANALYST (Đã tích hợp Notion Context)
 # ==============================================================================
 
-def get_ai_advice(today, r_data, r_score, l_data, user_label="User"):
-    print(f"[{user_label}] 🧠 Đang gọi AI Coach (Gemini)...")
+def get_ai_advice(today, r_data, r_score, l_data, user_config):
+    # Lấy thông tin cá nhân hóa từ Notion
+    user_label = user_config.get('name', 'VĐV')
+    goal = user_config.get('goal', 'Duy trì sức khỏe')
+    injury = user_config.get('injury', 'Không có')
+    note = user_config.get('note', '')
+
+    print(f"[{user_label}] 🧠 Đang gọi AI Coach (Context: {goal} | {injury})...")
+    
     if not GEMINI_API_KEY:
         return "⚠️ Lỗi: Chưa cấu hình GEMINI_API_KEY."
 
@@ -212,47 +202,52 @@ def get_ai_advice(today, r_data, r_score, l_data, user_label="User"):
         
         activities_text = "\n".join(l_data['raw_activities_for_ai']) if l_data['raw_activities_for_ai'] else "Không có hoạt động đáng kể."
         
-        # Lấy giờ VN
         vn_timezone = pytz.timezone('Asia/Ho_Chi_Minh')
         current_now = datetime.now(vn_timezone).strftime("%H:%M:%S, %d/%m/%Y")
         
         nap_text = f"+ Ngủ trưa: {int(r_data['nap_seconds']//60)} phút" if r_data['nap_seconds'] > 0 else ""
 
+        # --- PROMPT KẾT HỢP NOTION ---
         prompt = f"""
         Bạn là Huấn luyện viên thể thao chuyên nghiệp (AI Running Coach).
-        Hãy phân tích dữ liệu ngày {today} và đưa ra lời khuyên ngắn gọn cho VĐV tên {user_label}.
+        Hãy phân tích dữ liệu và đưa ra giáo án cho VĐV: {user_label}.
         Thời gian báo cáo: {current_now}
 
-        1. DỮ LIỆU SỨC KHỎE (QUAN TRỌNG)
+        HỒ SƠ VĐV (QUAN TRỌNG):
+        - **Mục tiêu hiện tại:** {goal}
+        - **Tình trạng chấn thương/Bệnh lý:** {injury}
+        - **Ghi chú thêm:** {note}
+
+        DỮ LIỆU CƠ THỂ HÔM NAY:
         - **Điểm Sẵn sàng:** {r_score}/100
         - **Cơ thể:** Pin Body Battery {r_data['body_battery']}/100 | Stress {r_data['stress']} (Thấp <25, Cao >50)
-        - **Chi tiết Giấc ngủ:** {r_data['sleep_text']}
+        - **Giấc ngủ:** {r_data['sleep_text']}
            {nap_text}
         - **Nhịp tim nghỉ (RHR):** {r_data['rhr']} bpm
 
-        2. DỮ LIỆU TẢI TẬP LUYỆN (7 NGÀY QUA)
+        TẢI TẬP LUYỆN (7 NGÀY):
         - **Tải trung bình ngày (Acute Load):** {int(l_data['avg_daily_load'])} (TRIMP Index)
-        - **Lịch sử hoạt động gần đây:**
+        - **Lịch sử hoạt động:**
         {activities_text}
 
         YÊU CẦU OUTPUT (Markdown Telegram):
-        Trả về báo cáo ngắn gọn, dùng icon sinh động:
+        Trả về báo cáo theo format dưới đây, văn phong thân thiện nhưng chuyên môn:
 
         **🔢 TỔNG QUAN HÔM NAY**
-        [Tóm tắt nhanh các chỉ số. Nhấn mạnh vào chất lượng giấc ngủ (Sâu/REM) nếu nó tốt hoặc xấu.]
+        [Đánh giá nhanh chỉ số. Nếu có chấn thương ghi trong Notion, hãy nhắc nhở ngay ở đây.]
 
         **🔥 ĐÁNH GIÁ TRẠNG THÁI**
-        [Cơ thể đang Sung sức hay Mệt mỏi? Giấc ngủ tối qua ảnh hưởng thế nào đến sự phục hồi hôm nay?]
+        [Cơ thể đang Sung sức hay Mệt mỏi? Giấc ngủ và Stress ảnh hưởng thế nào?]
 
         **🏃 BÀI TẬP ĐỀ XUẤT**
         [Dựa trên điểm Sẵn sàng và Tải tập luyện, đề xuất có nên tập hay nghỉ ngơi. Nếu tập, gợi ý cường độ và loại bài tập phù hợp.]
 
-        **💡 TIP HỒI PHỤC**
-        [Mẹo nhanh để cải thiện giấc ngủ và phục hồi cơ thể hiệu quả hơn.]
+        **💡 LỜI KHUYÊN**
+        [Một lời khuyên về dinh dưỡng hoặc phục hồi phù hợp với goal hiện tại.]
         """
 
         response = client.models.generate_content(
-            model="gemini-3-flash-preview", # Hoặc gemini-1.5-flash
+            model="gemini-3-flash-preview",
             contents=prompt
         )
         return response.text
@@ -266,8 +261,9 @@ def get_ai_advice(today, r_data, r_score, l_data, user_label="User"):
 # ==============================================================================
 
 async def send_telegram_report(message, chat_id, user_label="User"):
-    print(f"[{user_label}] 📲 Đang gửi báo cáo qua Telegram...")
+    print(f"[{user_label}] 📲 Đang gửi Telegram...")
     if not TELE_TOKEN or not chat_id:
+        print(f"[{user_label}] ⚠️ Không có Chat ID hoặc Token.")
         return
 
     bot = Bot(token=TELE_TOKEN)
@@ -275,52 +271,61 @@ async def send_telegram_report(message, chat_id, user_label="User"):
         await bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
         print(f"[{user_label}] ✅ Gửi thành công!")
     except Exception as e:
-        print(f"[{user_label}] ⚠️ Lỗi Markdown, gửi Plain Text: {e}")
-        await bot.send_message(chat_id=chat_id, text=message, parse_mode=None)
+        print(f"[{user_label}] ⚠️ Lỗi Markdown, đang gửi Plain Text...")
+        try:
+            await bot.send_message(chat_id=chat_id, text=message, parse_mode=None)
+        except Exception as e2:
+            print(f"❌ Lỗi gửi tin nhắn: {e2}")
 
 async def process_single_user(user_config):
+    # Lấy thông tin từ object user của Notion
     name = user_config.get('name', 'Unknown')
     email = user_config.get('email')
     password = user_config.get('password')
     tele_id = user_config.get('telegram_chat_id')
 
-    if not email or not password: return
-
-    try:
-        # Đăng nhập
-        client = Garmin(email, password)
-        client.login()
-        print(f"[{name}] ✅ Đăng nhập thành công.")
-        
-        today = date.today()
-        # today = date(2025, 12, 30) # Hardcode để test ngày cụ thể
-
-        # Xử lý dữ liệu
-        r_data, r_score, l_data = get_processed_data(client, today, name)
-
-        # AI Phân tích
-        ai_report = get_ai_advice(today, r_data, r_score, l_data, name)
-
-        # Gửi Telegram
-        if tele_id:
-            await send_telegram_report(ai_report, tele_id, name)
-            
-    except Exception as e:
-        print(f"[{name}] ❌ Lỗi: {e}")
-
-async def main():
-    print("=== GARMIN AI COACH PRO ===")
-    users_json = os.getenv("USERS_JSON")
-    if not users_json:
-        print("❌ Thiếu USERS_JSON")
+    if not email or not password: 
+        print(f"[{name}] ❌ Thiếu Email/Pass, bỏ qua.")
         return
 
     try:
-        users = json.loads(users_json)
-        tasks = [process_single_user(user) for user in users]
-        await asyncio.gather(*tasks)
+        client = Garmin(email, password)
+        client.login()
+        print(f"[{name}] ✅ Đăng nhập Garmin thành công.")
+        
+        today = date.today()
+        # today = date(2025, 12, 30) # Dùng khi test ngày cũ
+
+        # 1. Lấy dữ liệu Garmin (Sleep + Stats)
+        r_data, r_score, l_data = get_processed_data(client, today, name)
+
+        # 2. Gọi AI (Truyền cả user_config chứa Goal/Injury từ Notion)
+        ai_report = get_ai_advice(today, r_data, r_score, l_data, user_config)
+
+        # 3. Gửi Telegram
+        if tele_id:
+            await send_telegram_report(ai_report, tele_id, name)
+        else:
+            print(f"[{name}] ⚠️ Không có Chat ID, không gửi tin.")
+            
     except Exception as e:
-        print(f"❌ Lỗi: {e}")
+        print(f"[{name}] ❌ Lỗi xử lý: {e}")
+
+async def main():
+    print("=== GARMIN AI COACH PRO (NOTION INTEGRATED) ===")
+    
+    # Lấy danh sách user từ Notion thay vì biến môi trường cũ
+    users = get_users_from_notion()
+    
+    if not users:
+        print("⚠️ Không tìm thấy user nào Active trên Notion.")
+        return
+
+    print(f"🚀 Kích hoạt quy trình cho {len(users)} người dùng...")
+    
+    tasks = [process_single_user(user) for user in users]
+    await asyncio.gather(*tasks)
+    print("\n=== HOÀN TẤT ===")
 
 if __name__ == "__main__":
     asyncio.run(main())

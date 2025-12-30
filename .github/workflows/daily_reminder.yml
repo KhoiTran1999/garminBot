@@ -24,7 +24,5 @@ jobs:
 
       - name: Send Reminders
         env:
-          # Cần 2 biến này để biết gửi cho ai
-          USERS_JSON: ${{ secrets.USERS_JSON }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
         run: python remind.py
