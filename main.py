@@ -152,19 +152,19 @@ def get_ai_advice(today, r_data, r_score, l_data, user_label="User"):
         Hãy phân tích dữ liệu ngày {today} và đưa ra lời khuyên ngắn gọn cho VĐV tên {user_label}.
         Đây là thời gian hiện tại: {current_now}
 
-        ### 1. DỮ LIỆU SỨC KHỎE (READINESS)
+        1. DỮ LIỆU SỨC KHỎE (READINESS)
         - **Điểm Sẵn sàng:** {r_score}/100 (Thang điểm: <40 Kém, 40-70 TB, >70 Tốt)
         - **Cơ thể:** Pin {r_data['body_battery']}/100 | Stress {r_data['stress']} (Thấp <25, Cao >50)
         - **Giấc ngủ:** Đêm {round(r_data['sleep_seconds']/3600, 1)}h + Trưa {int(r_data['nap_seconds']//60)}p
         - **Nhịp tim nghỉ (RHR):** {r_data['rhr']} bpm
 
-        ### 2. DỮ LIỆU TẢI TẬP LUYỆN (7 NGÀY)
+        2. DỮ LIỆU TẢI TẬP LUYỆN (7 NGÀY)
         - **Tải trung bình ngày (Acute Load):** {int(l_data['avg_daily_load'])} (TRIMP Index)
         - **Max HR thực tế:** {l_data['final_calc_max_hr']} bpm
         - **Lịch sử hoạt động:**
         {activities_text}
 
-        ### YÊU CẦU OUTPUT (Markdown):
+        YÊU CẦU OUTPUT (Markdown):
         Hãy trả về báo cáo theo cấu trúc sau (dùng icon sinh động):
 
         **🔢 CÁC CHỈ SỐ HIỆN TẠI**
