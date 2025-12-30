@@ -234,7 +234,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config):
         Trả về báo cáo theo format dưới đây, văn phong thân thiện nhưng chuyên môn:
 
         **🔢 TỔNG QUAN HÔM NAY**
-        [Đánh giá nhanh chỉ số. Nếu có chấn thương ghi trong Notion, hãy nhắc nhở ngay ở đây.]
+        [Tổng hợp các chỉ số hiện tại của cơ thể và giấc ngủ.]
 
         **🔥 ĐÁNH GIÁ TRẠNG THÁI**
         [Cơ thể đang Sung sức hay Mệt mỏi? Giấc ngủ và Stress ảnh hưởng thế nào?]
