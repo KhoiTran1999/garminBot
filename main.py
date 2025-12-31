@@ -378,7 +378,7 @@ def convert_to_wav(audio_data: bytes, mime_type: str) -> bytes:
     )
     return header + audio_data
 
-async def generate_audio_from_text(text, output_file, voice="Puck"):
+async def generate_audio_from_text(text, output_file, voice="Sadachbia"):
     """
     Tạo file WAV dùng Gemini TTS.
     Model: gemini-2.5-pro-preview-tts (Matching user provided snippet)
