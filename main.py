@@ -4,6 +4,11 @@ import asyncio
 from datetime import date, timedelta, datetime
 from dotenv import load_dotenv
 import pytz
+import time
+import wave
+import struct
+import mimetypes
+
 
 # Thư viện
 from garminconnect import Garmin
@@ -12,6 +17,8 @@ from google import genai
 
 # Import module Notion mới tạo
 from notion_db import get_users_from_notion
+from google.genai import types
+import base64
 
 # --- CẤU HÌNH CHUNG ---
 load_dotenv()
@@ -82,10 +89,10 @@ def get_sleep_analysis(client, date_str, user_label="User"):
         if not dto:
             return 0, "Không có dữ liệu giấc ngủ chi tiết (Chưa đồng bộ)."
 
-        deep = dto.get('deepSleepSeconds', 0)
-        light = dto.get('lightSleepSeconds', 0)
-        rem = dto.get('remSleepSeconds', 0)
-        awake = dto.get('awakeSleepSeconds', 0)
+        deep = dto.get('deepSleepSeconds') or 0
+        light = dto.get('lightSleepSeconds') or 0
+        rem = dto.get('remSleepSeconds') or 0
+        awake = dto.get('awakeSleepSeconds') or 0
         
         # Tính tổng ngủ THỰC TẾ (Không tính Awake)
         real_sleep_sec = deep + light + rem
@@ -118,18 +125,19 @@ def get_processed_data(client, today, user_label="User"):
         summary = client.get_user_summary(date_iso)
         stats = summary.get('stats', summary)
         
-        readiness_data['rhr'] = stats.get('restingHeartRate', 0)
-        readiness_data['stress'] = stats.get('averageStressLevel', 0)
+        # Handle None values explicitly using 'or 0'
+        readiness_data['rhr'] = stats.get('restingHeartRate') or 0
+        readiness_data['stress'] = stats.get('averageStressLevel') or 0
         
         bb_val = summary.get('stats_and_body', {}).get('bodyBatteryMostRecentValue')
-        if bb_val is None: bb_val = stats.get('bodyBatteryMostRecentValue', 0)
+        if bb_val is None: bb_val = stats.get('bodyBatteryMostRecentValue') or 0
         readiness_data['body_battery'] = bb_val
         
-        events = stats.get('bodyBatteryActivityEventList', [])
+        events = stats.get('bodyBatteryActivityEventList') or []
         if events:
             for e in events:
                 if e.get('eventType') == 'NAP':
-                    readiness_data['nap_seconds'] += e.get('durationInMilliseconds', 0) / 1000
+                    readiness_data['nap_seconds'] += (e.get('durationInMilliseconds') or 0) / 1000
                 
     except Exception as e:
         print(f"[{user_label}] ⚠️ Lỗi lấy User Summary: {e}")
@@ -244,6 +252,8 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config):
 
         **💡 LỜI KHUYÊN**
         [Một lời khuyên về dinh dưỡng hoặc phục hồi phù hợp với goal hiện tại.]
+
+        LƯU Ý: Chỉ dùng dấu * để bold text cho text và *** để bold text cho title, dùng dấu • cho danh sách.
         """
 
         response = client.models.generate_content(
@@ -256,11 +266,226 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config):
         print(f"[{user_label}] ❌ Lỗi AI: {e}")
         return "AI Coach đang bận, vui lòng thử lại sau."
 
+def get_speech_script(original_text, user_config):
+    """
+    Dùng Gemini để viết lại nội dung báo cáo thành kịch bản nói tự nhiên.
+    """
+    user_label = user_config.get('name', 'Bạn')
+    print(f"[{user_label}] 🗣️ Đang viết kịch bản Voice...")
+    
+    if not GEMINI_API_KEY:
+        return original_text
+
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        prompt = f"""
+        Dưới đây là một báo cáo thể thao của user {user_label}:
+        ---
+        {original_text}
+        ---
+        Hãy viết lại nội dung trên thành một kịch bản nói (Speech Script) để chuyển sang giọng đọc AI (Text-to-Speech).
+        
+        YÊU CẦU:
+        1. Giọng văn: Thân mật, tự nhiên, như một người bạn hoặc HLV ân cần. Tránh đọc y chang các ký tự đặc biệt như dấu sao (*), gạch đầu dòng (-).
+        2. Mở đầu: "Chào {user_label},..."
+        3. Nội dung: Tóm tắt điểm chính về sức khỏe hôm nay, đánh giá ngắn gọn, và lời khuyên tập luyện. Đừng quá dài dòng liệt kê số liệu khô khan nếu không cần thiết.
+        4. Kết thúc: Một lời chúc năng lượng.
+        5. Sử dụng dấu "..." khi ngập ngừng cho lời nói chân thật hơn.
+        6. Quan trọng: Chỉ trả về text thuần để đọc, không chứa Markdown hay emoji.
+        """
+        
+        response = client.models.generate_content(
+            model="gemini-3-flash-preview",
+            contents=prompt
+        )
+        return response.text.strip()
+    except Exception as e:
+        print(f"[{user_label}] ⚠️ Lỗi Scripting: {e}")
+        return "Xin chào, đây là báo cáo sức khỏe của bạn. Hãy kiểm tra tin nhắn văn bản để biết chi tiết."
+
+
+def parse_audio_mime_type(mime_type: str) -> dict[str, int | None]:
+    """Parses bits per sample and rate from an audio MIME type string.
+
+    Assumes bits per sample is encoded like "L16" and rate as "rate=xxxxx".
+
+    Args:
+        mime_type: The audio MIME type string (e.g., "audio/L16;rate=24000").
+
+    Returns:
+        A dictionary with "bits_per_sample" and "rate" keys. Values will be
+        integers if found, otherwise None.
+    """
+    bits_per_sample = 16
+    rate = 24000
+
+    # Extract rate from parameters
+    parts = mime_type.split(";")
+    for param in parts: # Skip the main type part
+        param = param.strip()
+        if param.lower().startswith("rate="):
+            try:
+                rate_str = param.split("=", 1)[1]
+                rate = int(rate_str)
+            except (ValueError, IndexError):
+                # Handle cases like "rate=" with no value or non-integer value
+                pass # Keep rate as default
+        elif param.startswith("audio/L"):
+            try:
+                bits_per_sample = int(param.split("L", 1)[1])
+            except (ValueError, IndexError):
+                pass # Keep bits_per_sample as default if conversion fails
+
+    return {"bits_per_sample": bits_per_sample, "rate": rate}
+
+def convert_to_wav(audio_data: bytes, mime_type: str) -> bytes:
+    """Generates a WAV file header for the given audio data and parameters.
+
+    Args:
+        audio_data: The raw audio data as a bytes object.
+        mime_type: Mime type of the audio data.
+
+    Returns:
+        A bytes object representing the WAV file header.
+    """
+    parameters = parse_audio_mime_type(mime_type)
+    bits_per_sample = parameters["bits_per_sample"]
+    sample_rate = parameters["rate"]
+    num_channels = 1
+    data_size = len(audio_data)
+    bytes_per_sample = bits_per_sample // 8
+    block_align = num_channels * bytes_per_sample
+    byte_rate = sample_rate * block_align
+    chunk_size = 36 + data_size  # 36 bytes for header fields before data chunk size
+
+    # http://soundfile.sapp.org/doc/WaveFormat/
+
+    header = struct.pack(
+        "<4sI4s4sIHHIIHH4sI",
+        b"RIFF",          # ChunkID
+        chunk_size,       # ChunkSize (total file size - 8 bytes)
+        b"WAVE",          # Format
+        b"fmt ",          # Subchunk1ID
+        16,               # Subchunk1Size (16 for PCM)
+        1,                # AudioFormat (1 for PCM)
+        num_channels,     # NumChannels
+        sample_rate,      # SampleRate
+        byte_rate,        # ByteRate
+        block_align,      # BlockAlign
+        bits_per_sample,  # BitsPerSample
+        b"data",          # Subchunk2ID
+        data_size         # Subchunk2Size (size of audio data)
+    )
+    return header + audio_data
+
+async def generate_audio_from_text(text, output_file, voice="Puck"):
+    """
+    Tạo file WAV dùng Gemini TTS.
+    Model: gemini-2.5-pro-preview-tts (Matching user provided snippet)
+    Method: Streaming + Accumulation + Manual WAV Header
+    """
+    print(f"🗣️ Đang tạo voice bằng Gemini ({voice})...")
+    if not GEMINI_API_KEY:
+        return False
+        
+    retries = 3
+    for attempt in range(retries):
+        try:
+            client = genai.Client(api_key=GEMINI_API_KEY)
+            
+            contents = [
+                types.Content(
+                    role="user",
+                    parts=[
+                        types.Part.from_text(text=text),
+                    ],
+                ),
+            ]
+            
+            # Config matching user snippet
+            generate_content_config = types.GenerateContentConfig(
+                temperature=1,
+                response_modalities=["audio"],
+                speech_config=types.SpeechConfig(
+                    voice_config=types.VoiceConfig(
+                        prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                            voice_name=voice
+                        )
+                    )
+                ),
+            )
+            
+            # STRICTLY using the model from the user's snippet
+            model_name = "gemini-2.5-flash-preview-tts"
+            
+            print(f"   Model: {model_name} | Streaming...")
+            
+            all_raw_bytes = bytearray()
+            mime_type = None
+
+            # Stream loop matching user snippet structure
+            for chunk in client.models.generate_content_stream(
+                model=model_name,
+                contents=contents,
+                config=generate_content_config,
+            ):
+                if (chunk.candidates is None
+                    or chunk.candidates[0].content is None
+                    or chunk.candidates[0].content.parts is None):
+                    continue
+                
+                part = chunk.candidates[0].content.parts[0]
+                if part.inline_data and part.inline_data.data:
+                    # Capture mime for header generation
+                    if not mime_type:
+                        mime_type = part.inline_data.mime_type
+                    
+                    # Store raw PCM data
+                    all_raw_bytes.extend(part.inline_data.data)
+
+            if len(all_raw_bytes) > 0:
+                 # Default mime if missing
+                if not mime_type:
+                    mime_type = "audio/L16;rate=24000"
+                
+                # Convert FINAL accumulated raw bytes to WAV
+                # Note: We do this ONCE for the whole file, not per chunk.
+                wav_data = convert_to_wav(all_raw_bytes, mime_type)
+
+                # Ensure output file ends with .wav
+                if not output_file.lower().endswith(".wav"):
+                     output_file = output_file.rsplit('.', 1)[0] + ".wav"
+                
+                # Write to file
+                try:
+                    with open(output_file, "wb") as f:
+                        f.write(wav_data)
+                    print(f"✅ Audio saved to {output_file} (Total wrapped Size: {len(wav_data)} bytes)")
+                    return True
+                except Exception as e:
+                     print(f"❌ Error writing file: {e}")
+                     return False
+            else:
+                print("❌ Stream finished. No audio data collected.")
+                return False
+
+        except Exception as e:
+            error_msg = str(e)
+            if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+                wait_time = 40 * (attempt + 1)
+                print(f"⚠️ Quota Exceeded. Retrying in {wait_time}s... (Attempt {attempt+1}/{retries})")
+                time.sleep(wait_time)
+            else:
+                print(f"❌ Lỗi Gemini TTS: {e}")
+                return False
+                
+    return False
+
 # ==============================================================================
 # 4. MODULE TELEGRAM & MAIN FLOW
 # ==============================================================================
 
-async def send_telegram_report(message, chat_id, user_label="User"):
+async def send_telegram_report(message, chat_id, user_label="User", audio_path=None):
     print(f"[{user_label}] 📲 Đang gửi Telegram...")
     if not TELE_TOKEN or not chat_id:
         print(f"[{user_label}] ⚠️ Không có Chat ID hoặc Token.")
@@ -276,6 +501,16 @@ async def send_telegram_report(message, chat_id, user_label="User"):
             await bot.send_message(chat_id=chat_id, text=message, parse_mode=None)
         except Exception as e2:
             print(f"❌ Lỗi gửi tin nhắn: {e2}")
+
+    # Gửi Voice nếu có
+    if audio_path and os.path.exists(audio_path):
+        print(f"[{user_label}] 🎙️ Đang gửi Voice Note...")
+        try:
+            with open(audio_path, 'rb') as audio:
+                await bot.send_voice(chat_id=chat_id, voice=audio, caption="🎧 Voice Coach")
+            print(f"[{user_label}] ✅ Gửi Voice thành công!")
+        except Exception as e:
+            print(f"[{user_label}] ⚠️ Lỗi gửi Voice: {e}")
 
 async def process_single_user(user_config):
     # Lấy thông tin từ object user của Notion
@@ -302,11 +537,23 @@ async def process_single_user(user_config):
         # 2. Gọi AI (Truyền cả user_config chứa Goal/Injury từ Notion)
         ai_report = get_ai_advice(today, r_data, r_score, l_data, user_config)
 
-        # 3. Gửi Telegram
+        # 3. Tạo Voice Script & Audio
+        speech_script = get_speech_script(ai_report, user_config)
+        
+        audio_file = f"voice_{name}_{today}.wav"
+        has_audio = await generate_audio_from_text(speech_script, audio_file)
+        
+        # 4. Gửi Telegram (Kèm Audio)
         if tele_id:
-            await send_telegram_report(ai_report, tele_id, name)
+            await send_telegram_report(ai_report, tele_id, name, audio_file if has_audio else None)
         else:
             print(f"[{name}] ⚠️ Không có Chat ID, không gửi tin.")
+        
+        # Xóa file audio tạm
+        if has_audio and os.path.exists(audio_file):
+            try:
+                os.remove(audio_file)
+            except: pass
             
     except Exception as e:
         print(f"[{name}] ❌ Lỗi xử lý: {e}")
