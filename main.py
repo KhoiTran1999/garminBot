@@ -8,6 +8,7 @@ import time
 import wave
 import struct
 import mimetypes
+from typing import Optional, Dict
 
 
 # Thư viện
@@ -304,7 +305,7 @@ def get_speech_script(original_text, user_config):
         return "Xin chào, đây là báo cáo sức khỏe của bạn. Hãy kiểm tra tin nhắn văn bản để biết chi tiết."
 
 
-def parse_audio_mime_type(mime_type: str) -> dict[str, int | None]:
+def parse_audio_mime_type(mime_type: str) -> Dict[str, Optional[int]]:
     """Parses bits per sample and rate from an audio MIME type string.
 
     Assumes bits per sample is encoded like "L16" and rate as "rate=xxxxx".
