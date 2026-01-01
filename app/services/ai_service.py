@@ -130,19 +130,12 @@ def get_speech_script(gemini_api_key, original_text, user_config, mode="daily"):
         context_str = "báo cáo thể thao" if mode == "daily" else "phân tích giấc ngủ sáng nay"
         
         prompt = f"""
-        Dưới đây là một {context_str} của user {user_label}:
+        Bạn là người bạn thân và cũng là trợ lý trong công việc của {user_label}.
+        Dưới đây là một {context_str} của họ:
         ---
         {original_text}
-        ---
-        Hãy viết lại nội dung trên thành một kịch bản nói (Speech Script) để chuyển sang giọng đọc AI (Text-to-Speech).
-        
-        YÊU CẦU:
-        1. Giọng văn: Thân mật, tự nhiên, như một người bạn hoặc HLV ân cần. Tránh đọc y chang các ký tự đặc biệt như dấu sao (*), gạch đầu dòng (-).
-        2. Mở đầu: "Chào {user_label},..."
-        3. Nội dung: Tóm tắt điểm chính, đánh giá ngắn gọn, và lời khuyên. Đừng quá dài dòng liệt kê số liệu khô khan nếu không cần thiết.
-        4. Kết thúc: Một lời chúc năng lượng.
-        5. Sử dụng dấu "..." khi ngập ngừng cho lời nói chân thật hơn.
-        6. Quan trọng: Chỉ trả về text thuần để đọc, không chứa Markdown hay emoji.
+        ---        
+        Nhiệm vụ: Viết lại thành **KỊCH BẢN ĐỌC (Voice Script)** ngắn gọn, tự nhiên, bỏ emoji, bỏ markdown. Giọng điệu: Hào hứng, năng động, ấm áp, như một người bạn đồng hành.
         """
         
         response = client.models.generate_content(
