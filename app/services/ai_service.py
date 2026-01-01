@@ -1,0 +1,279 @@
+import os
+import pytz
+import time
+import struct
+from datetime import datetime
+from typing import Optional, Dict
+from google import genai
+from google.genai import types
+
+def get_ai_advice(gemini_api_key, today, r_data, r_score, l_data, user_config, mode="daily"):
+    # Lấy thông tin cá nhân hóa từ Notion
+    user_label = user_config.get('name', 'VĐV')
+    goal = user_config.get('goal', 'Duy trì sức khỏe')
+    injury = user_config.get('injury', 'Không có')
+    note = user_config.get('note', '')
+
+    print(f"[{user_label}] 🧠 Đang gọi AI Coach (Mode: {mode} | Context: {goal})...")
+    
+    if not gemini_api_key:
+        return "⚠️ Lỗi: Chưa cấu hình GEMINI_API_KEY."
+
+    try:
+        client = genai.Client(api_key=gemini_api_key)
+        
+        activities_text = "\n".join(l_data['raw_activities_for_ai']) if l_data['raw_activities_for_ai'] else "Không có hoạt động đáng kể."
+        
+        vn_timezone = pytz.timezone('Asia/Ho_Chi_Minh')
+        current_now = datetime.now(vn_timezone).strftime("%H:%M:%S, %d/%m/%Y")
+        
+        nap_text = f"+ Ngủ trưa: {int(r_data['nap_seconds']//60)} phút" if r_data['nap_seconds'] > 0 else ""
+
+        if mode == "sleep_analysis":
+            # --- PROMPT PHÂN TÍCH GIẤC NGỦ (BUỔI SÁNG) ---
+            prompt = f"""
+            Bạn là Chuyên gia giấc ngủ và Hiệu suất thể thao (AI Sleep Coach).
+            Hãy phân tích dữ liệu giấc ngủ đêm qua và đưa ra lời khuyên đầu ngày cho: {user_label}.
+            Thời gian báo cáo hiện tại: {current_now}
+
+            HỒ SƠ VĐV:
+            - **Mục tiêu:** {goal}
+            - **Chấn thương:** {injury}
+            - **Lưu ý:** {note}
+
+            DỮ LIỆU ĐÊM QUA & SÁNG NAY:
+            - **Điểm Sẵn sàng (Readiness):** {r_score}/100
+            - **Giấc ngủ:** {r_data['sleep_text']} (Ngủ nông/sâu/REM)
+            - **Phục hồi:** Body Battery {r_data['body_battery']}/100 | Stress {r_data['stress']} 
+            - **Nhịp tim nghỉ (RHR):** {r_data['rhr']} bpm
+
+            YÊU CẦU OUTPUT (Markdown Telegram):
+            Trả về báo cáo ngắn gọn, tập trung vào chất lượng giấc ngủ và sự sẵn sàng cho ngày mới:
+
+            **💤 PHÂN TÍCH GIẤC NGỦ**
+            [Đánh giá chất lượng giấc ngủ đêm qua: Sâu/REM có đủ không? Có bị thức giấc nhiều không?]
+
+            **🔋 TRẠNG THÁI PHỤC HỒI**
+            [Dựa trên Body Battery và Stress, cơ thể đã nạp đủ năng lượng chưa?]
+
+            **🌅 LỜI KHUYÊN SÁNG NAY**
+            [Dựa trên điểm Sẵn sàng: Hôm nay nên tập nặng hay nhẹ? Lời khuyên để tỉnh táo hơn.]
+
+            LƯU Ý: Dùng văn phong tích cực, động viên. Dùng icon phù hợp.
+            """
+        else:
+            # --- PROMPT TỔNG HỢP (BUỔI CHIỀU) ---
+            prompt = f"""
+            Bạn là Huấn luyện viên thể thao chuyên nghiệp (AI Running Coach).
+            Hãy phân tích dữ liệu và đưa ra giáo án cho VĐV: {user_label}.
+            Thời gian báo cáo hiện tại: {current_now}
+
+            HỒ SƠ VĐV:
+            - **Mục tiêu hiện tại:** {goal}
+            - **Tình trạng chấn thương/Bệnh lý:** {injury}
+            - **Ghi chú thêm:** {note}
+
+            DỮ LIỆU CƠ THỂ HÔM NAY:
+            - **Điểm Sẵn sàng:** {r_score}/100
+            - **Cơ thể:** Pin Body Battery {r_data['body_battery']}/100 | Stress {r_data['stress']} (Thấp <25, Cao >50)
+            - **Giấc ngủ:** {r_data['sleep_text']}
+               {nap_text}
+            - **Nhịp tim nghỉ (RHR):** {r_data['rhr']} bpm
+
+            TẢI TẬP LUYỆN (7 NGÀY):
+            - **Tải trung bình ngày (Acute Load):** {int(l_data['avg_daily_load'])} (TRIMP Index)
+            - **Lịch sử hoạt động:**
+            {activities_text}
+
+            YÊU CẦU OUTPUT (Markdown Telegram):
+            Trả về báo cáo theo format dưới đây, văn phong thân thiện nhưng chuyên môn:
+
+            **🔢 TỔNG QUAN HÔM NAY**
+            [Tổng hợp các chỉ số hiện tại của cơ thể và giấc ngủ.]
+
+            **🔥 ĐÁNH GIÁ TRẠNG THÁI**
+            [Cơ thể đang Sung sức hay Mệt mỏi? Giấc ngủ và Stress ảnh hưởng thế nào?]
+
+            **🏃 BÀI TẬP ĐỀ XUẤT**
+            [Dựa trên điểm Sẵn sàng và Tải tập luyện, đề xuất có nên tập hay nghỉ ngơi. Nếu tập, gợi ý cường độ và loại bài tập phù hợp.]
+
+            **💡 LỜI KHUYÊN**
+            [Một lời khuyên về dinh dưỡng hoặc phục hồi phù hợp với goal hiện tại.]
+
+            LƯU Ý: Chỉ dùng dấu * để bold text cho text và *** để bold text cho title, dùng dấu • cho danh sách.
+            """
+
+        response = client.models.generate_content(
+            model="gemini-3-flash-preview",
+            contents=prompt
+        )
+        return response.text
+
+    except Exception as e:
+        print(f"[{user_label}] ❌ Lỗi AI: {e}")
+        return "AI Coach đang bận, vui lòng thử lại sau."
+
+def get_speech_script(gemini_api_key, original_text, user_config, mode="daily"):
+    """
+    Dùng Gemini để viết lại nội dung báo cáo thành kịch bản nói tự nhiên.
+    """
+    user_label = user_config.get('name', 'Bạn')
+    print(f"[{user_label}] 🗣️ Đang viết kịch bản Voice...")
+    
+    if not gemini_api_key:
+        return original_text
+
+    try:
+        client = genai.Client(api_key=gemini_api_key)
+        
+        context_str = "báo cáo thể thao" if mode == "daily" else "phân tích giấc ngủ sáng nay"
+        
+        prompt = f"""
+        Dưới đây là một {context_str} của user {user_label}:
+        ---
+        {original_text}
+        ---
+        Hãy viết lại nội dung trên thành một kịch bản nói (Speech Script) để chuyển sang giọng đọc AI (Text-to-Speech).
+        
+        YÊU CẦU:
+        1. Giọng văn: Thân mật, tự nhiên, như một người bạn hoặc HLV ân cần. Tránh đọc y chang các ký tự đặc biệt như dấu sao (*), gạch đầu dòng (-).
+        2. Mở đầu: "Chào {user_label},..."
+        3. Nội dung: Tóm tắt điểm chính, đánh giá ngắn gọn, và lời khuyên. Đừng quá dài dòng liệt kê số liệu khô khan nếu không cần thiết.
+        4. Kết thúc: Một lời chúc năng lượng.
+        5. Sử dụng dấu "..." khi ngập ngừng cho lời nói chân thật hơn.
+        6. Quan trọng: Chỉ trả về text thuần để đọc, không chứa Markdown hay emoji.
+        """
+        
+        response = client.models.generate_content(
+            model="gemini-3-flash-preview",
+            contents=prompt
+        )
+        return response.text.strip()
+    except Exception as e:
+        print(f"[{user_label}] ⚠️ Lỗi Scripting: {e}")
+        return "Xin chào, đây là báo cáo sức khỏe của bạn. Hãy kiểm tra tin nhắn văn bản để biết chi tiết."
+
+def parse_audio_mime_type(mime_type: str) -> Dict[str, Optional[int]]:
+    """Parses bits per sample and rate from an audio MIME type string."""
+    bits_per_sample = 16
+    rate = 24000
+    parts = mime_type.split(";")
+    for param in parts:
+        param = param.strip()
+        if param.lower().startswith("rate="):
+            try:
+                rate_str = param.split("=", 1)[1]
+                rate = int(rate_str)
+            except (ValueError, IndexError):
+                pass 
+        elif param.startswith("audio/L"):
+            try:
+                bits_per_sample = int(param.split("L", 1)[1])
+            except (ValueError, IndexError):
+                pass
+    return {"bits_per_sample": bits_per_sample, "rate": rate}
+
+def convert_to_wav(audio_data: bytes, mime_type: str) -> bytes:
+    """Generates a WAV file header for the given audio data and parameters."""
+    parameters = parse_audio_mime_type(mime_type)
+    bits_per_sample = parameters["bits_per_sample"]
+    sample_rate = parameters["rate"]
+    num_channels = 1
+    data_size = len(audio_data)
+    bytes_per_sample = bits_per_sample // 8
+    block_align = num_channels * bytes_per_sample
+    byte_rate = sample_rate * block_align
+    chunk_size = 36 + data_size
+
+    header = struct.pack(
+        "<4sI4s4sIHHIIHH4sI",
+        b"RIFF", chunk_size, b"WAVE", b"fmt ", 16, 1, num_channels, 
+        sample_rate, byte_rate, block_align, bits_per_sample, b"data", data_size
+    )
+    return header + audio_data
+
+async def generate_audio_from_text(gemini_api_key, text, output_file, voice="Sadachbia"):
+    """
+    Tạo file WAV dùng Gemini TTS.
+    """
+    print(f"🗣️ Đang tạo voice bằng Gemini ({voice})...")
+    if not gemini_api_key:
+        return False
+        
+    retries = 3
+    for attempt in range(retries):
+        try:
+            client = genai.Client(api_key=gemini_api_key)
+            
+            contents = [
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=text)],
+                ),
+            ]
+            
+            generate_content_config = types.GenerateContentConfig(
+                temperature=1,
+                response_modalities=["audio"],
+                speech_config=types.SpeechConfig(
+                    voice_config=types.VoiceConfig(
+                        prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                            voice_name=voice
+                        )
+                    )
+                ),
+            )
+            
+            model_name = "gemini-2.5-flash-preview-tts"
+            
+            # print(f"   Model: {model_name} | Streaming...")
+            
+            all_raw_bytes = bytearray()
+            mime_type = None
+
+            for chunk in client.models.generate_content_stream(
+                model=model_name,
+                contents=contents,
+                config=generate_content_config,
+            ):
+                if (chunk.candidates is None
+                    or chunk.candidates[0].content is None
+                    or chunk.candidates[0].content.parts is None):
+                    continue
+                
+                part = chunk.candidates[0].content.parts[0]
+                if part.inline_data and part.inline_data.data:
+                    if not mime_type:
+                        mime_type = part.inline_data.mime_type
+                    all_raw_bytes.extend(part.inline_data.data)
+
+            if len(all_raw_bytes) > 0:
+                if not mime_type: mime_type = "audio/L16;rate=24000"
+                wav_data = convert_to_wav(all_raw_bytes, mime_type)
+
+                if not output_file.lower().endswith(".wav"):
+                     output_file = output_file.rsplit('.', 1)[0] + ".wav"
+                
+                try:
+                    with open(output_file, "wb") as f:
+                        f.write(wav_data)
+                    print(f"✅ Audio saved to {output_file}")
+                    return True
+                except Exception as e:
+                     print(f"❌ Error writing file: {e}")
+                     return False
+            else:
+                print("❌ Stream finished. No audio data collected.")
+                return False
+
+        except Exception as e:
+            error_msg = str(e)
+            if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+                wait_time = 40 * (attempt + 1)
+                print(f"⚠️ Quota Exceeded. Retrying in {wait_time}s... (Attempt {attempt+1}/{retries})")
+                time.sleep(wait_time)
+            else:
+                print(f"❌ Lỗi Gemini TTS: {e}")
+                return False
+                
+    return False

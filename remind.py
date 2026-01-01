@@ -1,40 +1,23 @@
 import os
 import asyncio
-from telegram import Bot
+import argparse
 from dotenv import load_dotenv
 
-# Import module lấy dữ liệu từ Notion
-from notion_db import get_users_from_notion
+# Import từ App packages
+from app.services.notion_service import get_users_from_notion
+from app.services.telegram_service import send_reminder_message
 
 # Load biến môi trường
 load_dotenv()
 TELE_TOKEN = os.getenv("TELEGRAM_TOKEN")
 
-async def send_reminder_to_user(user_config, bot):
-    """Gửi tin nhắn nhắc nhở đồng bộ cho 1 user"""
-    name = user_config.get('name', 'Bạn')
-    chat_id = user_config.get('telegram_chat_id')
-    
-    if not chat_id:
-        print(f"⚠️ {name}: Không có Chat ID, bỏ qua.")
-        return
-
-    try:
-        message = (
-            f"🔔 *NHẮC NHỞ QUAN TRỌNG CHO {name.upper()}*\n\n"
-            "Đã 4:00 PM rồi! 🕓\n"
-            "Hãy mở App Garmin Connect và **đồng bộ dữ liệu ngay** "
-            "để AI Coach có dữ liệu mới nhất phân tích vào lúc 5:00 PM nhé! ⌚️🏃‍♂️"
-        )
-        # Gửi tin nhắn
-        await bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
-        print(f"✅ Đã gửi nhắc nhở cho: {name}")
-        
-    except Exception as e:
-        print(f"❌ Lỗi gửi cho {name}: {e}")
-
 async def main():
-    print("=== DAILY REMINDER (NOTION EDITION) ===")
+    parser = argparse.ArgumentParser(description="Gửi nhắc nhở Telegram")
+    parser.add_argument("--type", default="daily", help="Loại nhắc nhở: daily (chiều) hoặc sleep (sáng)")
+    args = parser.parse_args()
+    
+    reminder_type = args.type
+    print(f"=== REMINDER SERVICE: {reminder_type.upper()} ===")
     
     if not TELE_TOKEN:
         print("❌ Lỗi: Thiếu TELEGRAM_TOKEN trong file .env")
@@ -49,10 +32,12 @@ async def main():
 
     print(f"🚀 Bắt đầu gửi nhắc nhở cho {len(users)} người dùng...")
 
-    bot = Bot(token=TELE_TOKEN)
+    # 2. Gửi nhắc nhở
+    # Lưu ý: send_reminder_message cần TELE_TOKEN để khởi tạo Bot bên trong, hoặc Bot object.
+    # Logic cũ khởi tạo Bot ở main và pass vào.
+    # Logic mới trong telegram_service: send_reminder_message(bot_token, user_config, type)
     
-    # 2. Tạo task gửi song song (để chạy nhanh hơn)
-    tasks = [send_reminder_to_user(user, bot) for user in users]
+    tasks = [send_reminder_message(TELE_TOKEN, user, reminder_type) for user in users]
     await asyncio.gather(*tasks)
     
     print("\n=== ĐÃ HOÀN TẤT GỬI NHẮC NHỞ ===")
