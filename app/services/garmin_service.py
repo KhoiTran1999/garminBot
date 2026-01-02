@@ -115,3 +115,58 @@ def get_processed_data(client, today, user_label="User"):
         print(f"[{user_label}] ⚠️ Lỗi lấy Activities: {e}")
 
     return readiness_data, readiness_score, load_stats
+
+def fetch_daily_activities_detailed(client, date_obj, user_label="User"):
+    """
+    Lấy danh sách hoạt động trong 24h (Hôm qua & Hôm nay) kèm detail full.
+    Trả về list các dict activity_details.
+    """
+    print(f"[{user_label}] 🔄 Đang quét hoạt động 24h qua...")
+    
+    # 24h window: Today and Yesterday
+    start_date = date_obj - timedelta(days=1)
+    
+    try:
+        activities = client.get_activities_by_date(start_date.isoformat(), date_obj.isoformat(), "")
+        
+        if not activities:
+            print(f"[{user_label}] ⚠️ Không có hoạt động nào trong 24h.")
+            return []
+
+        detailed_list = []
+        print(f"[{user_label}] ✅ Tìm thấy {len(activities)} hoạt động. Đang lấy chi tiết...")
+
+        for act in activities:
+            activity_id = act.get("activityId")
+            activity_name = act.get("activityName")
+            
+            # Base structure
+            detail_obj = {
+                "activityId": activity_id,
+                "activityName": activity_name,
+                "summary": act
+            }
+
+            # Helper to safely call API
+            def safe_fetch(method_name, key):
+                try:
+                    method = getattr(client, method_name)
+                    data = method(activity_id)
+                    detail_obj[key] = data
+                except Exception:
+                    detail_obj[key] = None
+
+            # Fetch deep details
+            safe_fetch("get_activity_splits", "splits")
+            safe_fetch("get_activity_weather", "weather")
+            safe_fetch("get_activity_hr_in_timezones", "hr_zones")
+            safe_fetch("get_activity_power_in_timezones", "power_zones")
+            safe_fetch("get_activity_details", "activity_details") # Time-series data
+
+            detailed_list.append(detail_obj)
+            
+        return detailed_list
+
+    except Exception as e:
+        print(f"[{user_label}] ❌ Lỗi fetch activity detailed: {e}")
+        return []

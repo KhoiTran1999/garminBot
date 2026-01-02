@@ -1,0 +1,11 @@
+{
+    "date": "2026-01-02",
+    "get_progress_summary_between_dates": [
+        {
+            "date": "2026-01-02",
+            "countOfActivities": 0,
+            "stats": {}
+        }
+    ],
+    "activities_analysis": "No activity found"
+}

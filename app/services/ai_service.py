@@ -114,6 +114,80 @@ def get_ai_advice(gemini_api_key, today, r_data, r_score, l_data, user_config, m
         print(f"[{user_label}] ❌ Lỗi AI: {e}")
         return "AI Coach đang bận, vui lòng thử lại sau."
 
+def get_workout_analysis_advice(gemini_api_key, activity_data_list, user_config):
+    """
+    Phân tích chi tiết (Time-series) các bài tập trong 24h.
+    """
+    user_label = user_config.get('name', 'VĐV')
+    goal = user_config.get('goal', 'Cải thiện thành tích')
+    
+    print(f"[{user_label}] 🧠 Đang phân tích chi tiết bài tập...")
+    
+    if not gemini_api_key or not activity_data_list:
+        return None
+
+    try:
+        client = genai.Client(api_key=gemini_api_key)
+        
+        # Chỉ lấy dữ liệu quan trọng để tránh quá token, nhưng vẫn đủ time-series metrics
+        # Serialize list activities to JSON string or formatted text
+        import json
+        activities_json = json.dumps(activity_data_list, ensure_ascii=False, default=str)
+        
+        vn_timezone = pytz.timezone('Asia/Ho_Chi_Minh')
+        current_now = datetime.now(vn_timezone).strftime("%H:%M:%S, %d/%m/%Y")
+
+        prompt = f"""
+        Bạn là Chuyên gia phân tích dữ liệu thể thao (Sports Data Scientist) và HLV chuyên nghiệp.
+        Hãy phân tích dữ liệu bài tập trong 24h qua của VĐV: {user_label}.
+        Thời gian báo cáo: {current_now}
+        
+        MỤC TIÊU VĐV: {goal}
+        
+        DỮ LIỆU CHI TIẾT (JSON):
+        {activities_json}
+        
+        YÊU CẦU PHÂN TÍCH (Time-series Analysis):
+        Dựa vào Splits, HR Zones, Power Zones, Weather và Activity Details:
+        1. **Phân tích Biểu đồ & Splits:**
+           - Pace/Power có ổn định không? Có bị drift (trượt) nhịp tim không (Cardiac Drift)?
+           - Phân bổ sức (Pacing strategy) trong các splits như thế nào (Negative, Positive, hay Even Split)?
+        2. **Đánh giá Cường độ & Hiệu quả:**
+           - Thời gian trong các vùng tim (HR Zones) và vùng Power có phù hợp với loại bài tập không?
+           - Tác động của thời tiết (Nhiệt độ, Gió) lên hiệu suất.
+        3. **Nhận xét & Lời khuyên:**
+           - Kỹ thuật/Chiến thuật cần cải thiện.
+           - Đánh giá bài tập này đóng góp gì cho mục tiêu {goal}.
+        
+        OUTPUT FORMAT (Markdown Telegram):
+        Trả về báo cáo ngắn gọn, chuyên sâu, dùng emoji:
+        
+        **📊 PHÂN TÍCH BÀI TẬP CHUYÊN SÂU**
+        
+        **1. 🏃 Đánh giá Pace & Chiến thuật**
+        [Nhận xét về độ ổn định Pace, Splits, Pacing]
+        
+        **2. ❤️ Nhịp tim & Cường độ**
+        [Phân tích HR Zones, Cardiac Drift, Power (nếu có)]
+        
+        **3. ⛅ Tác động Ngoại cảnh**
+        [Thời tiết, nhiệt độ ảnh hưởng ra sao]
+        
+        **💡 TỔNG KẾT & LỜI KHUYÊN**
+        [Kết luận hiệu quả bài tập + Lời khuyên cụ thể]
+        
+        LƯU Ý: Chỉ dùng dấu * để bold text cho text và *** để bold text cho title, dùng dấu • cho danh sách.
+        """
+
+        response = client.models.generate_content(
+            model="gemini-3-flash-preview",
+            contents=prompt
+        )
+        return response.text
+
+    except Exception as e:
+        print(f"[{user_label}] ❌ Lỗi AI Workout Analysis: {e}")
+        return None
 def get_speech_script(gemini_api_key, original_text, user_config, mode="daily"):
     """
     Dùng Gemini để viết lại nội dung báo cáo thành kịch bản nói tự nhiên.
@@ -124,28 +198,39 @@ def get_speech_script(gemini_api_key, original_text, user_config, mode="daily"):
     if not gemini_api_key:
         return original_text
 
-    try:
-        client = genai.Client(api_key=gemini_api_key)
-        
-        context_str = "báo cáo thể thao" if mode == "daily" else "phân tích giấc ngủ sáng nay"
-        
-        prompt = f"""
-        Bạn là người bạn thân và cũng là trợ lý trong công việc của {user_label}.
-        Dưới đây là một {context_str} của họ:
-        ---
-        {original_text}
-        ---        
-        Nhiệm vụ: Viết lại thành **KỊCH BẢN ĐỌC (Voice Script)** ngắn gọn, tự nhiên, bỏ emoji, bỏ markdown. Giọng điệu: Hào hứng, năng động, ấm áp, như một người bạn đồng hành.
-        """
-        
-        response = client.models.generate_content(
-            model="gemini-3-flash-preview",
-            contents=prompt
-        )
-        return response.text.strip()
-    except Exception as e:
-        print(f"[{user_label}] ⚠️ Lỗi Scripting: {e}")
-        return "Xin chào, đây là báo cáo sức khỏe của bạn. Hãy kiểm tra tin nhắn văn bản để biết chi tiết."
+    retries = 3
+    for attempt in range(retries):
+        try:
+            client = genai.Client(api_key=gemini_api_key)
+            
+            context_str = "báo cáo thể thao" if mode == "daily" else "phân tích giấc ngủ sáng nay"
+            
+            prompt = f"""
+            Bạn là người bạn thân và cũng là trợ lý trong công việc của {user_label}.
+            Dưới đây là một {context_str} của họ:
+            ---
+            {original_text}
+            ---        
+            Nhiệm vụ: Viết lại thành **KỊCH BẢN ĐỌC (Voice Script)** ngắn gọn, tự nhiên, bỏ emoji, bỏ markdown. Giọng điệu: Hào hứng, năng động, ấm áp, như một người bạn đồng hành.
+            """
+            
+            response = client.models.generate_content(
+                model="gemini-3-flash-preview",
+                contents=prompt
+            )
+            return response.text.strip()
+            
+        except Exception as e:
+            error_msg = str(e)
+            if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+                wait_time = 60 # Wait 60s as suggested by API
+                print(f"[{user_label}] ⚠️ Quota Exceeded (Scripting). Retrying in {wait_time}s... (Attempt {attempt+1}/{retries})")
+                time.sleep(wait_time)
+            else:
+                print(f"[{user_label}] ⚠️ Lỗi Scripting: {e}")
+                return "Xin chào, đây là báo cáo sức khỏe của bạn. Hãy kiểm tra tin nhắn văn bản để biết chi tiết."
+    
+    return "Xin chào, đây là báo cáo sức khỏe của bạn. Hãy kiểm tra tin nhắn văn bản để biết chi tiết."
 
 def parse_audio_mime_type(mime_type: str) -> Dict[str, Optional[int]]:
     """Parses bits per sample and rate from an audio MIME type string."""
