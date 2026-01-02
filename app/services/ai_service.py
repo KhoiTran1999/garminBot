@@ -57,7 +57,7 @@ def get_ai_advice(gemini_api_key, today, r_data, r_score, l_data, user_config, m
             [Dựa trên Body Battery và Stress, cơ thể đã nạp đủ năng lượng chưa?]
 
             **🌅 LỜI KHUYÊN SÁNG NAY**
-            [Dựa trên điểm Sẵn sàng: Hôm nay nên tập nặng hay nhẹ? Lời khuyên để tỉnh táo hơn.]
+            [Lời khuyên để có một ngày tốt lành.]
 
             LƯU Ý: 
             Chỉ dùng dấu * để bold text cho text và *** để bold text cho title, dùng dấu • cho danh sách.
