@@ -29,6 +29,16 @@ def get_ai_advice(gemini_api_key, today, r_data, r_score, l_data, user_config, m
         
         nap_text = f"+ Ngủ trưa: {int(r_data['nap_seconds']//60)} phút" if r_data['nap_seconds'] > 0 else ""
 
+        # Format SpO2 & Respiration Text
+        spo2_text = "Không có dữ liệu"
+        if r_data.get('avg_spo2'):
+            spo2_text = f"Avg {int(r_data['avg_spo2'])}% | Min {int(r_data['min_spo2'])}% | Last {int(r_data['last_spo2'])}%"
+            
+        resp_text = "Không có dữ liệu"
+        if r_data.get('avg_waking_resp'):
+            resp_text = (f"Waking Avg {int(r_data['avg_waking_resp'])} brpm | Sleep Avg {int(r_data['avg_sleep_resp'])} brpm | "
+                         f"Min {int(r_data['min_resp'])} - Max {int(r_data['max_resp'])}")
+
         if mode == "sleep_analysis":
             # --- PROMPT PHÂN TÍCH GIẤC NGỦ (BUỔI SÁNG) ---
             prompt = f"""
@@ -46,12 +56,15 @@ def get_ai_advice(gemini_api_key, today, r_data, r_score, l_data, user_config, m
             - **Giấc ngủ:** {r_data['sleep_text']} (Ngủ nông/sâu/REM)
             - **Phục hồi:** Body Battery {r_data['body_battery']}/100 | Stress {r_data['stress']} 
             - **Nhịp tim nghỉ (RHR):** {r_data['rhr']} bpm
+            - **SpO2 (Oxy máu):** {spo2_text}
+            - **Hô hấp (Respiration):** {resp_text}
 
             YÊU CẦU OUTPUT (Markdown Telegram):
             Trả về báo cáo ngắn gọn, tập trung vào chất lượng giấc ngủ và sự sẵn sàng cho ngày mới:
 
             **💤 PHÂN TÍCH GIẤC NGỦ**
             [Đánh giá chất lượng giấc ngủ đêm qua: Sâu/REM có đủ không? Có bị thức giấc nhiều không?]
+            [Nhận xét về SpO2 và Nhịp thở nếu có bất thường]
 
             **🔋 TRẠNG THÁI PHỤC HỒI**
             [Dựa trên Body Battery và Stress, cơ thể đã nạp đủ năng lượng chưa?]
@@ -80,6 +93,8 @@ def get_ai_advice(gemini_api_key, today, r_data, r_score, l_data, user_config, m
             - **Giấc ngủ:** {r_data['sleep_text']}
                {nap_text}
             - **Nhịp tim nghỉ (RHR):** {r_data['rhr']} bpm
+            - **SpO2:** {spo2_text}
+            - **Hô hấp:** {resp_text}
 
             TẢI TẬP LUYỆN (7 NGÀY):
             - **Tải trung bình ngày (Acute Load):** {int(l_data['avg_daily_load'])} (TRIMP Index)

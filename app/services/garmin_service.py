@@ -74,6 +74,24 @@ def get_processed_data(client, today, user_label="User"):
     readiness_data['sleep_hours'] = real_hours
     readiness_data['sleep_text'] = sleep_desc
 
+    # --- B2. SpO2 & Respiration ---
+    try:
+        # SpO2
+        spo2_data = get_spo2_data(client, date_iso) or {}
+        readiness_data['avg_spo2'] = spo2_data.get('averageSpO2')
+        readiness_data['min_spo2'] = spo2_data.get('lowestSpO2')
+        readiness_data['last_spo2'] = spo2_data.get('latestSpO2')
+
+        # Respiration
+        resp_data = get_respiration_data(client, date_iso) or {}
+        readiness_data['avg_waking_resp'] = resp_data.get('avgWakingRespirationValue')
+        readiness_data['avg_sleep_resp'] = resp_data.get('avgSleepRespirationValue')
+        readiness_data['min_resp'] = resp_data.get('lowestRespirationValue')
+        readiness_data['max_resp'] = resp_data.get('highestRespirationValue')
+        
+    except Exception as e:
+        print(f"[{user_label}] ⚠️ Lỗi lấy SpO2/Respiration: {e}")
+
     readiness_score = calculate_readiness_score(readiness_data)
 
     # --- C. Training Load (7 ngày) ---
@@ -170,3 +188,33 @@ def fetch_daily_activities_detailed(client, date_obj, user_label="User"):
     except Exception as e:
         print(f"[{user_label}] ❌ Lỗi fetch activity detailed: {e}")
         return []
+
+def get_spo2_data(client, date_str):
+    """
+    Lay du lieu SpO2 trong ngay.
+    """
+    try:
+        return client.get_spo2_data(date_str)
+    except Exception as e:
+        print(f"⚠️ Lỗi lấy SpO2: {e}")
+        return None
+
+def get_respiration_data(client, date_str):
+    """
+    Lay du lieu Respiration (Nhip tho) trong ngay.
+    """
+    try:
+        return client.get_respiration_data(date_str)
+    except Exception as e:
+        print(f"⚠️ Lỗi lấy Respiration: {e}")
+        return None
+
+def get_hrv_data(client, date_str):
+    """
+    Lay du lieu HRV (Heart Rate Variability) trong ngay.
+    """
+    try:
+        return client.get_hrv_data(date_str)
+    except Exception as e:
+        print(f"⚠️ Lỗi lấy HRV: {e}")
+        return None
