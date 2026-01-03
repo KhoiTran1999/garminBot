@@ -38,10 +38,6 @@ async def process_single_user(user_config, mode):
         # 1. Lấy dữ liệu Garmin (Sleep + Stats)
         r_data, r_score, l_data = get_processed_data(client, today, name)
 
-        print("r_data", r_data)
-        print("r_score", r_score)
-        print("l_data", l_data)
-        return
         # 2. Gọi AI (Truyền cả user_config chứa Goal/Injury từ Notion)
         ai_report = get_ai_advice(GEMINI_API_KEY, today, r_data, r_score, l_data, user_config, mode)
 
