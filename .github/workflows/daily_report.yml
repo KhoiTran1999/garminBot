@@ -1,9 +1,6 @@
 name: Daily Garmin Report (5PM)
 
 on:
-  schedule:
-    # Sửa thành 10:00 UTC (tức 17:00 VN)
-    - cron: '0 10 * * *' 
   workflow_dispatch:
 
 jobs:

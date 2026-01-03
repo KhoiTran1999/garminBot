@@ -1,9 +1,6 @@
 name: Daily Workout Analysis (9PM)
 
 on:
-  schedule:
-    # 21:00 VN = 14:00 UTC
-    - cron: '0 14 * * *'
   workflow_dispatch:
 
 jobs:
