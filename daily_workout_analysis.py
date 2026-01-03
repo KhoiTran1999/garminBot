@@ -14,7 +14,7 @@ from app.services.telegram_service import send_telegram_report
 # --- CẤU HÌNH ---
 load_dotenv()
 TELE_TOKEN = os.getenv("TELEGRAM_TOKEN")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# GEMINI_API_KEY handled inside ai_service
 
 async def process_user_workout_analysis(user_config):
     name = user_config.get('name', 'Unknown')
@@ -43,7 +43,7 @@ async def process_user_workout_analysis(user_config):
             return
 
         # 3. AI Phân tích chuyên sâu
-        ai_report = get_workout_analysis_advice(GEMINI_API_KEY, activities, user_config)
+        ai_report = get_workout_analysis_advice(activities, user_config)
         
         if not ai_report:
             print(f"[{name}] ⚠️ Không tạo được báo cáo AI.")
@@ -58,10 +58,10 @@ async def process_user_workout_analysis(user_config):
         import time
         time.sleep(60) # Wait 60s before next AI call to avoid Rate Limit (Free Tier)
         
-        voice_script = get_speech_script(GEMINI_API_KEY, ai_report, user_config, mode="daily")
+        voice_script = get_speech_script(ai_report, user_config, mode="daily")
         
         audio_file = f"voice_workout_{name}_{today}.wav"
-        has_audio = await generate_audio_from_text(GEMINI_API_KEY, voice_script, audio_file)
+        has_audio = await generate_audio_from_text(voice_script, audio_file)
 
         # 5. Gửi Telegram
         if tele_id:

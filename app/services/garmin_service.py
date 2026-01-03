@@ -136,19 +136,19 @@ def get_processed_data(client, today, user_label="User"):
 
 def fetch_daily_activities_detailed(client, date_obj, user_label="User"):
     """
-    Lấy danh sách hoạt động trong 24h (Hôm qua & Hôm nay) kèm detail full.
+    Lấy danh sách hoạt động trong ngày (Hôm nay) kèm detail full.
     Trả về list các dict activity_details.
     """
-    print(f"[{user_label}] 🔄 Đang quét hoạt động 24h qua...")
+    print(f"[{user_label}] 🔄 Đang quét hoạt động trong ngày...")
     
-    # 24h window: Today and Yesterday
-    start_date = date_obj - timedelta(days=1)
+    # Only fetch today's activities
+    start_date = date_obj 
     
     try:
         activities = client.get_activities_by_date(start_date.isoformat(), date_obj.isoformat(), "")
         
         if not activities:
-            print(f"[{user_label}] ⚠️ Không có hoạt động nào trong 24h.")
+            print(f"[{user_label}] ⚠️ Không có hoạt động nào trong ngày.")
             return []
 
         detailed_list = []

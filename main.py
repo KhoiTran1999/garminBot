@@ -14,7 +14,7 @@ from app.services.telegram_service import send_telegram_report
 # --- CẤU HÌNH CHUNG ---
 load_dotenv()
 TELE_TOKEN = os.getenv("TELEGRAM_TOKEN")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# GEMINI_API_KEY handled inside ai_service
 
 async def process_single_user(user_config, mode):
     # Lấy thông tin từ object user của Notion
@@ -39,13 +39,13 @@ async def process_single_user(user_config, mode):
         r_data, r_score, l_data = get_processed_data(client, today, name)
 
         # 2. Gọi AI (Truyền cả user_config chứa Goal/Injury từ Notion)
-        ai_report = get_ai_advice(GEMINI_API_KEY, today, r_data, r_score, l_data, user_config, mode)
+        ai_report = get_ai_advice(today, r_data, r_score, l_data, user_config, mode)
 
         # 3. Tạo Voice Script & Audio
-        speech_script = get_speech_script(GEMINI_API_KEY, ai_report, user_config, mode)
+        speech_script = get_speech_script(ai_report, user_config, mode)
         
         audio_file = f"voice_{name}_{today}_morning.wav" if mode == "sleep_analysis" else f"voice_{name}_{today}.wav"
-        has_audio = await generate_audio_from_text(GEMINI_API_KEY, speech_script, audio_file)
+        has_audio = await generate_audio_from_text(speech_script, audio_file)
         
         # 4. Gửi Telegram (Kèm Audio)
         if tele_id:
