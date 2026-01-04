@@ -52,10 +52,10 @@ def get_prompts_from_notion():
                 
                 # FIX: Join ALL text parts, not just [0]
                 full_raw_name = "".join([t.get("plain_text", "") for t in name_prop])
-                prompt_key = full_raw_name.strip()
+                prompt_key = full_raw_name.strip().lower() # Normalize to lowercase
                 
                 # Debug: Print Name to see what we got
-                print(f"   -> Processing row: '{prompt_key}' (Raw: '{full_raw_name}')")
+                print(f"   -> Processing row: '{prompt_key}' (Raw: {repr(full_raw_name)})")
 
                 if not prompt_key:
                     print(f"   -> Skipping row with empty Name.")
