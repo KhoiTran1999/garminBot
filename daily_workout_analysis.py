@@ -9,6 +9,7 @@ from garminconnect import Garmin
 from app.services.notion_service import get_users_from_notion
 from app.services.garmin_service import fetch_daily_activities_detailed
 from app.services.ai_service import get_workout_analysis_advice, get_speech_script, generate_audio_from_text
+from app.services.prompt_service import get_prompts_from_notion
 from app.services.telegram_service import send_telegram_report
 
 # --- CẤU HÌNH ---
@@ -16,7 +17,7 @@ load_dotenv()
 TELE_TOKEN = os.getenv("TELEGRAM_TOKEN")
 # GEMINI_API_KEY handled inside ai_service
 
-async def process_user_workout_analysis(user_config):
+async def process_user_workout_analysis(user_config, prompts):
     name = user_config.get('name', 'Unknown')
     email = user_config.get('email')
     password = user_config.get('password')
@@ -43,7 +44,13 @@ async def process_user_workout_analysis(user_config):
             return
 
         # 3. AI Phân tích chuyên sâu
-        ai_report = get_workout_analysis_advice(activities, user_config)
+        workout_template = prompts.get("workout_analysis")
+        if workout_template:
+            print(f"[{name}] ℹ️ Using Prompt: 'workout_analysis' (Model: {workout_template.get('model', 'default')})")
+        else:
+             print(f"[{name}] ⚠️ Prompt 'workout_analysis' not found in Notion. Using Fallback.")
+
+        ai_report = get_workout_analysis_advice(activities, user_config, prompt_template=workout_template)
         
         if not ai_report:
             print(f"[{name}] ⚠️ Không tạo được báo cáo AI.")
@@ -58,7 +65,8 @@ async def process_user_workout_analysis(user_config):
         import time
         time.sleep(60) # Wait 60s before next AI call to avoid Rate Limit (Free Tier)
         
-        voice_script = get_speech_script(ai_report, user_config, mode="daily")
+        voice_template = prompts.get("voice_script")
+        voice_script = get_speech_script(ai_report, user_config, prompt_template=voice_template, mode="daily")
         
         audio_file = f"voice_workout_{name}_{today}.wav"
         has_audio = await generate_audio_from_text(voice_script, audio_file)
@@ -89,7 +97,10 @@ async def main():
 
     print(f"🚀 Kích hoạt phân tích bài tập cho {len(users)} người dùng...")
     
-    tasks = [process_user_workout_analysis(user) for user in users]
+    # Fetch prompts once
+    prompts = get_prompts_from_notion()
+
+    tasks = [process_user_workout_analysis(user, prompts) for user in users]
     await asyncio.gather(*tasks)
     print("\n=== HOÀN TẤT ===")
 

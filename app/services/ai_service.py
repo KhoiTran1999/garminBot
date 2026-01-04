@@ -60,7 +60,7 @@ class GeminiKeyManager:
 # Khởi tạo Global Instance
 key_manager = GeminiKeyManager()
 
-def get_ai_advice(today, r_data, r_score, l_data, user_config, mode="daily"):
+def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=None, mode="daily"):
     """
     Gọi AI để lấy lời khuyên. Tự động xoay key khi gặp lỗi Quota.
     """
@@ -87,7 +87,72 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, mode="daily"):
         resp_text = (f"Waking Avg {int(r_data['avg_waking_resp'])} brpm | Sleep Avg {int(r_data['avg_sleep_resp'])} brpm | "
                         f"Min {int(r_data['min_resp'])} - Max {int(r_data['max_resp'])}")
 
-    if mode == "sleep_analysis":
+    
+    # Pre-calculate derived values for safe formatting
+    avg_daily_load_int = int(l_data['avg_daily_load']) if l_data and 'avg_daily_load' in l_data else 0
+
+    formatted_prompt = None
+    model_to_use = "gemini-3-flash-preview"
+
+    if prompt_template and isinstance(prompt_template, dict):
+        try:
+            # New structure: system_prompt, user_template, model
+            sys_p = prompt_template.get("system_prompt", "")
+            user_tmplt = prompt_template.get("user_template", "")
+            model_to_use = prompt_template.get("model", "gemini-3-flash-preview")
+            
+            # Format User Template only (System Prompt is usually static or minimal)
+            # If system prompt specifically needs formatting, add it here.
+            # Assuming currently only user_template needs dynamic data.
+            formatted_user_part = user_tmplt.format(
+                user_label=user_label,
+                goal=goal,
+                injury=injury,
+                note=note,
+                current_now=current_now,
+                r_score=r_score,
+                r_data=r_data,
+                l_data=l_data,
+                avg_daily_load_int=avg_daily_load_int,
+                activities_text=activities_text,
+                nap_text=nap_text,
+                spo2_text=spo2_text,
+                resp_text=resp_text
+            )
+            
+            # Concatenate System + User. Or better: keep them separate if API supports. 
+            # But generate_content usually takes string or list.
+            # Let's combine them for simplicity:
+            formatted_prompt = f"{sys_p}\n\n{formatted_user_part}"
+
+        except Exception as e:
+            print(f"[{user_label}] ⚠️ Error formatting Notion prompt ({mode}): {e}")
+            formatted_prompt = None
+    elif prompt_template and isinstance(prompt_template, str):
+         # Old behavior / Fallback if string passed
+         try:
+            formatted_prompt = prompt_template.format(
+                user_label=user_label,
+                goal=goal,
+                injury=injury,
+                note=note,
+                current_now=current_now,
+                r_score=r_score,
+                r_data=r_data,
+                l_data=l_data,
+                avg_daily_load_int=avg_daily_load_int, 
+                activities_text=activities_text,
+                nap_text=nap_text,
+                spo2_text=spo2_text,
+                resp_text=resp_text
+            )
+         except Exception as e:
+            print(f"[{user_label}] ⚠️ Error formatting Notion string prompt ({mode}): {e}")
+            formatted_prompt = None
+
+    if formatted_prompt:
+        prompt = formatted_prompt
+    elif mode == "sleep_analysis":
         prompt = f"""
         Bạn là Chuyên gia giấc ngủ và Hiệu suất thể thao (AI Sleep Coach).
         Hãy phân tích dữ liệu giấc ngủ đêm qua và đưa ra lời khuyên đầu ngày cho: {user_label}.
@@ -174,7 +239,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, mode="daily"):
         try:
             client = genai.Client(api_key=current_api_key)
             response = client.models.generate_content(
-                model="gemini-3-flash-preview", # Upscale model luôn
+                model=model_to_use, # Use dynamic model
                 contents=prompt
             )
             # Thành công -> Rotate một cái để lần sau dùng key khác (Load balancing)
@@ -197,7 +262,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, mode="daily"):
 
     return "AI Coach đang bận hoặc hết Quota tất cả các key. Vui lòng thử lại sau."
 
-def get_workout_analysis_advice(activity_data_list, user_config):
+def get_workout_analysis_advice(activity_data_list, user_config, prompt_template=None):
     """
     Phân tích chi tiết (Time-series) các bài tập trong 24h.
     """
@@ -216,47 +281,82 @@ def get_workout_analysis_advice(activity_data_list, user_config):
     vn_timezone = pytz.timezone('Asia/Ho_Chi_Minh')
     current_now = datetime.now(vn_timezone).strftime("%H:%M:%S, %d/%m/%Y")
 
-    prompt = f"""
-    Bạn là Chuyên gia phân tích dữ liệu thể thao (Sports Data Scientist) và HLV chuyên nghiệp.
-    Hãy phân tích dữ liệu bài tập trong 24h qua của VĐV: {user_label}.
-    Thời gian báo cáo: {current_now}
-    
-    MỤC TIÊU VĐV: {goal}
-    
-    DỮ LIỆU CHI TIẾT (JSON):
-    {activities_json}
-    
-    YÊU CẦU PHÂN TÍCH (Time-series Analysis):
-    Dựa vào Splits, HR Zones, Power Zones, Weather và Activity Details:
-    1. **Phân tích Biểu đồ & Splits:**
-        - Pace/Power có ổn định không? Có bị drift (trượt) nhịp tim không (Cardiac Drift)?
-        - Phân bổ sức (Pacing strategy) trong các splits như thế nào (Negative, Positive, hay Even Split)?
-    2. **Đánh giá Cường độ & Hiệu quả:**
-        - Thời gian trong các vùng tim (HR Zones) và vùng Power có phù hợp với loại bài tập không?
-        - Tác động của thời tiết (Nhiệt độ, Gió) lên hiệu suất.
-    3. **Nhận xét & Lời khuyên:**
-        - Kỹ thuật/Chiến thuật cần cải thiện.
-        - Đánh giá bài tập này đóng góp gì cho mục tiêu {goal}.
-    
-    OUTPUT FORMAT (Markdown Telegram):
-    Trả về báo cáo ngắn gọn, chuyên sâu, dùng emoji:
-    
-    **📊 PHÂN TÍCH BÀI TẬP CHUYÊN SÂU**
-    
-    **1. 🏃 Đánh giá Pace & Chiến thuật**
-    [Nhận xét về độ ổn định Pace, Splits, Pacing]
-    
-    **2. ❤️ Nhịp tim & Cường độ**
-    [Phân tích HR Zones, Cardiac Drift, Power (nếu có)]
-    
-    **3. ⛅ Tác động Ngoại cảnh**
-    [Thời tiết, nhiệt độ ảnh hưởng ra sao]
-    
-    **💡 TỔNG KẾT & LỜI KHUYÊN**
-    [Kết luận hiệu quả bài tập + Lời khuyên cụ thể]
-    
-    LƯU Ý: Chỉ dùng dấu * để bold text cho text và *** để bold text cho title, dùng dấu • cho danh sách.
-    """
+    formatted_prompt = None
+    model_to_use = "gemini-3-flash-preview"
+
+    if prompt_template and isinstance(prompt_template, dict):
+        try:
+            sys_p = prompt_template.get("system_prompt", "")
+            user_tmplt = prompt_template.get("user_template", "")
+            model_to_use = prompt_template.get("model", "gemini-3-flash-preview")
+
+            formatted_user = user_tmplt.format(
+                user_label=user_label,
+                goal=goal,
+                current_now=current_now,
+                activities_json=activities_json
+            )
+            formatted_prompt = f"{sys_p}\n\n{formatted_user}"
+        except Exception as e:
+             print(f"[{user_label}] ⚠️ Error formatting Notion workout prompt (dict): {e}")
+             formatted_prompt = None
+
+    elif prompt_template and isinstance(prompt_template, str):
+        try:
+            formatted_prompt = prompt_template.format(
+                user_label=user_label,
+                goal=goal,
+                current_now=current_now,
+                activities_json=activities_json
+            )
+        except Exception as e:
+            print(f"[{user_label}] ⚠️ Error formatting Notion workout prompt: {e}")
+            formatted_prompt = None
+
+    if formatted_prompt:
+        prompt = formatted_prompt
+    else:
+        prompt = f"""
+        Bạn là Chuyên gia phân tích dữ liệu thể thao (Sports Data Scientist) và HLV chuyên nghiệp.
+        Hãy phân tích dữ liệu bài tập trong 24h qua của VĐV: {user_label}.
+        Thời gian báo cáo: {current_now}
+        
+        MỤC TIÊU VĐV: {goal}
+        
+        DỮ LIỆU CHI TIẾT (JSON):
+        {activities_json}
+        
+        YÊU CẦU PHÂN TÍCH (Time-series Analysis):
+        Dựa vào Splits, HR Zones, Power Zones, Weather và Activity Details:
+        1. **Phân tích Biểu đồ & Splits:**
+            - Pace/Power có ổn định không? Có bị drift (trượt) nhịp tim không (Cardiac Drift)?
+            - Phân bổ sức (Pacing strategy) trong các splits như thế nào (Negative, Positive, hay Even Split)?
+        2. **Đánh giá Cường độ & Hiệu quả:**
+            - Thời gian trong các vùng tim (HR Zones) và vùng Power có phù hợp với loại bài tập không?
+            - Tác động của thời tiết (Nhiệt độ, Gió) lên hiệu suất.
+        3. **Nhận xét & Lời khuyên:**
+            - Kỹ thuật/Chiến thuật cần cải thiện.
+            - Đánh giá bài tập này đóng góp gì cho mục tiêu {goal}.
+        
+        OUTPUT FORMAT (Markdown Telegram):
+        Trả về báo cáo ngắn gọn, chuyên sâu, dùng emoji:
+        
+        **📊 PHÂN TÍCH BÀI TẬP CHUYÊN SÂU**
+        
+        **1. 🏃 Đánh giá Pace & Chiến thuật**
+        [Nhận xét về độ ổn định Pace, Splits, Pacing]
+        
+        **2. ❤️ Nhịp tim & Cường độ**
+        [Phân tích HR Zones, Cardiac Drift, Power (nếu có)]
+        
+        **3. ⛅ Tác động Ngoại cảnh**
+        [Thời tiết, nhiệt độ ảnh hưởng ra sao]
+        
+        **💡 TỔNG KẾT & LỜI KHUYÊN**
+        [Kết luận hiệu quả bài tập + Lời khuyên cụ thể]
+        
+        LƯU Ý: Chỉ dùng dấu * để bold text cho text và *** để bold text cho title, dùng dấu • cho danh sách.
+        """
 
     # --- ROTATION LOGIC ---
     max_attempts = key_manager.get_key_count() * 2
@@ -267,7 +367,7 @@ def get_workout_analysis_advice(activity_data_list, user_config):
         try:
             client = genai.Client(api_key=current_api_key)
             response = client.models.generate_content(
-                model="gemini-3-flash-preview",
+                model=model_to_use,
                 contents=prompt
             )
             key_manager.rotate_key()
@@ -280,7 +380,7 @@ def get_workout_analysis_advice(activity_data_list, user_config):
 
     return None
 
-def get_speech_script(original_text, user_config, mode="daily"):
+def get_speech_script(original_text, user_config, prompt_template=None, mode="daily"):
     """
     Dùng Gemini để viết lại nội dung báo cáo thành kịch bản nói tự nhiên.
     """
@@ -289,14 +389,48 @@ def get_speech_script(original_text, user_config, mode="daily"):
     
     context_str = "báo cáo thể thao" if mode == "daily" else "phân tích giấc ngủ sáng nay"
     
-    prompt = f"""
-    Bạn là người bạn thân và cũng là trợ lý trong công việc của {user_label}.
-    Dưới đây là một {context_str} của họ:
-    ---
-    {original_text}
-    ---        
-    Nhiệm vụ: Viết lại thành **KỊCH BẢN ĐỌC (Voice Script)** ngắn gọn, tự nhiên, bỏ emoji, bỏ markdown. Giọng điệu: Hào hứng, năng động, ấm áp, như một người bạn đồng hành.
-    """
+    formatted_prompt = None
+    model_to_use = "gemini-3-flash-preview"
+
+    if prompt_template and isinstance(prompt_template, dict):
+        try:
+             # Voice script might not need intricate splitting but consistency helps
+             sys_p = prompt_template.get("system_prompt", "")
+             user_tmplt = prompt_template.get("user_template", "")
+             model_to_use = prompt_template.get("model", "gemini-3-flash-preview")
+             
+             formatted_user = user_tmplt.format(
+                user_label=user_label,
+                context_str=context_str,
+                original_text=original_text
+             )
+             formatted_prompt = f"{sys_p}\n\n{formatted_user}"
+        except Exception as e:
+            print(f"[{user_label}] ⚠️ Error formatting Notion voice prompt (dict): {e}")
+            formatted_prompt = None
+
+    elif prompt_template and isinstance(prompt_template, str):
+        try:
+            formatted_prompt = prompt_template.format(
+                user_label=user_label,
+                context_str=context_str,
+                original_text=original_text
+            )
+        except Exception as e:
+            print(f"[{user_label}] ⚠️ Error formatting Notion voice prompt: {e}")
+            formatted_prompt = None
+
+    if formatted_prompt:
+        prompt = formatted_prompt
+    else:
+        prompt = f"""
+        Bạn là người bạn thân và cũng là trợ lý trong công việc của {user_label}.
+        Dưới đây là một {context_str} của họ:
+        ---
+        {original_text}
+        ---        
+        Nhiệm vụ: Viết lại thành **KỊCH BẢN ĐỌC (Voice Script)** ngắn gọn, tự nhiên, bỏ emoji, bỏ markdown. Giọng điệu: Hào hứng, năng động, ấm áp, như một người bạn đồng hành.
+        """
 
     # --- ROTATION LOGIC ---
     max_attempts = key_manager.get_key_count() * 2
@@ -307,7 +441,7 @@ def get_speech_script(original_text, user_config, mode="daily"):
         try:
             client = genai.Client(api_key=current_api_key)
             response = client.models.generate_content(
-                model="gemini-3-flash-preview",
+                model=model_to_use,
                 contents=prompt
             )
             key_manager.rotate_key()

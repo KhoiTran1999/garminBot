@@ -9,6 +9,7 @@ from garminconnect import Garmin
 from app.services.notion_service import get_users_from_notion
 from app.services.garmin_service import get_processed_data
 from app.services.ai_service import get_ai_advice, get_speech_script, generate_audio_from_text
+from app.services.prompt_service import get_prompts_from_notion
 from app.services.telegram_service import send_telegram_report
 
 # --- CẤU HÌNH CHUNG ---
@@ -16,7 +17,7 @@ load_dotenv()
 TELE_TOKEN = os.getenv("TELEGRAM_TOKEN")
 # GEMINI_API_KEY handled inside ai_service
 
-async def process_single_user(user_config, mode):
+async def process_single_user(user_config, mode, prompts):
     # Lấy thông tin từ object user của Notion
     name = user_config.get('name', 'Unknown')
     email = user_config.get('email')
@@ -39,10 +40,20 @@ async def process_single_user(user_config, mode):
         r_data, r_score, l_data = get_processed_data(client, today, name)
 
         # 2. Gọi AI (Truyền cả user_config chứa Goal/Injury từ Notion)
-        ai_report = get_ai_advice(today, r_data, r_score, l_data, user_config, mode)
+        # Select prompt based on mode
+        prompt_key = "sleep_analysis" if mode == "sleep_analysis" else "daily_report"
+        advice_template = prompts.get(prompt_key)
+        
+        if advice_template:
+            print(f"[{name}] ℹ️ Using Prompt: '{prompt_key}' (Model: {advice_template.get('model', 'default')})")
+        else:
+            print(f"[{name}] ⚠️ Prompt '{prompt_key}' not found in Notion. Using Hardcoded Fallback.")
+
+        ai_report = get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=advice_template, mode=mode)
 
         # 3. Tạo Voice Script & Audio
-        speech_script = get_speech_script(ai_report, user_config, mode)
+        voice_template = prompts.get("voice_script")
+        speech_script = get_speech_script(ai_report, user_config, prompt_template=voice_template, mode=mode)
         
         audio_file = f"voice_{name}_{today}_morning.wav" if mode == "sleep_analysis" else f"voice_{name}_{today}.wav"
         has_audio = await generate_audio_from_text(speech_script, audio_file)
@@ -79,7 +90,10 @@ async def main():
 
     print(f"🚀 Kích hoạt quy trình cho {len(users)} người dùng...")
     
-    tasks = [process_single_user(user, mode) for user in users]
+    # Fetch prompts once
+    prompts = get_prompts_from_notion()
+    
+    tasks = [process_single_user(user, mode, prompts) for user in users]
     await asyncio.gather(*tasks)
     print("\n=== HOÀN TẤT ===")
 
