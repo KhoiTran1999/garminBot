@@ -57,6 +57,42 @@ class GeminiKeyManager:
     def get_key_count(self):
         return len(self.keys)
 
+    def execute_with_retry(self, worker_func, default_return=None, verbose_label="Service"):
+        """
+        Thực thi worker_func với logic Retry & Rotate Key.
+        worker_func(api_key) -> result
+        """
+        max_attempts = self.get_key_count() * 2
+        if max_attempts == 0: 
+            print(f"[{verbose_label}] ⚠️ Không có API Key nào để thực thi.")
+            return default_return
+
+        for attempt in range(max_attempts):
+            current_api_key = self.get_current_key()
+            try:
+                # Thực thi logic chính
+                result = worker_func(current_api_key)
+                
+                # Thành công -> Rotate để load balancing
+                self.rotate_key()
+                return result
+
+            except Exception as e:
+                error_msg = str(e)
+                print(f"[{verbose_label}] ⚠️ Lỗi AI (Key ...{current_api_key[-5:] if current_api_key else 'None'}): {error_msg}")
+                
+                # Logic xử lý lỗi + Rotate
+                if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "quota" in error_msg.lower():
+                    print(f"   --> Quota Exceeded. Rotating key...")
+                    self.rotate_key()
+                    time.sleep(1)
+                else:
+                    self.rotate_key()
+                    time.sleep(2)
+
+        print(f"[{verbose_label}] ❌ Đã thử tất cả các keys nhưng vẫn thất bại.")
+        return default_return
+
 # Khởi tạo Global Instance
 key_manager = GeminiKeyManager()
 
@@ -230,37 +266,20 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
         LƯU Ý: Chỉ dùng dấu * để bold text cho text và *** để bold text cho title, dùng dấu • cho danh sách.
         """
 
-    # --- CƠ CHẾ XOAY VÒNG KEY & RETRY ---
-    max_attempts = key_manager.get_key_count() * 2 # Thử gấp đôi số key để chắc chắn
-    if max_attempts == 0: return "⚠️ Lỗi: Không tìm thấy GEMINI_API_KEY nào."
+    # --- CƠ CHẾ XOAY VÒNG KEY & RETRY (Refactored) ---
+    def worker(api_key):
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model=model_to_use, 
+            contents=prompt
+        )
+        return response.text
 
-    for attempt in range(max_attempts):
-        current_api_key = key_manager.get_current_key()
-        try:
-            client = genai.Client(api_key=current_api_key)
-            response = client.models.generate_content(
-                model=model_to_use, # Use dynamic model
-                contents=prompt
-            )
-            # Thành công -> Rotate một cái để lần sau dùng key khác (Load balancing)
-            key_manager.rotate_key()
-            return response.text
-
-        except Exception as e:
-            error_msg = str(e)
-            print(f"[{user_label}] ⚠️ Lỗi AI (Key ending ...{current_api_key[-5:] if current_api_key else 'None'}): {error_msg}")
-            
-            # Xử lý các lỗi cần đổi key
-            if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "quota" in error_msg.lower():
-                print(f"   --> Quota Exceeded. Rotating key...")
-                key_manager.rotate_key()
-                time.sleep(1) # Nghỉ nhẹ 1s
-            else:
-                # Lỗi không phải quota (vd 500, network) -> Cũng thử rotate tiếp xem sao
-                key_manager.rotate_key()
-                time.sleep(2)
-
-    return "AI Coach đang bận hoặc hết Quota tất cả các key. Vui lòng thử lại sau."
+    return key_manager.execute_with_retry(
+        worker_func=worker,
+        default_return="AI Coach đang bận hoặc hết Quota tất cả các key. Vui lòng thử lại sau.",
+        verbose_label=user_label
+    )
 
 def get_workout_analysis_advice(activity_data_list, user_config, prompt_template=None):
     """
@@ -358,27 +377,20 @@ def get_workout_analysis_advice(activity_data_list, user_config, prompt_template
         LƯU Ý: Chỉ dùng dấu * để bold text cho text và *** để bold text cho title, dùng dấu • cho danh sách.
         """
 
-    # --- ROTATION LOGIC ---
-    max_attempts = key_manager.get_key_count() * 2
-    if max_attempts == 0: return None
+    # --- ROTATION LOGIC (Refactored) ---
+    def worker(api_key):
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model=model_to_use,
+            contents=prompt
+        )
+        return response.text
 
-    for attempt in range(max_attempts):
-        current_api_key = key_manager.get_current_key()
-        try:
-            client = genai.Client(api_key=current_api_key)
-            response = client.models.generate_content(
-                model=model_to_use,
-                contents=prompt
-            )
-            key_manager.rotate_key()
-            return response.text
-        except Exception as e:
-            error_msg = str(e)
-            print(f"[{user_label}] ⚠️ Lỗi AI Workout (Key ...{current_api_key[-5:]}): {error_msg}")
-            key_manager.rotate_key()
-            time.sleep(1)
-
-    return None
+    return key_manager.execute_with_retry(
+        worker_func=worker,
+        default_return=None,
+        verbose_label=user_label
+    )
 
 def get_speech_script(original_text, user_config, prompt_template=None, mode="daily"):
     """
@@ -432,27 +444,20 @@ def get_speech_script(original_text, user_config, prompt_template=None, mode="da
         Nhiệm vụ: Viết lại thành **KỊCH BẢN ĐỌC (Voice Script)** ngắn gọn, tự nhiên, bỏ emoji, bỏ markdown. Giọng điệu: Hào hứng, năng động, ấm áp, như một người bạn đồng hành.
         """
 
-    # --- ROTATION LOGIC ---
-    max_attempts = key_manager.get_key_count() * 2
-    if max_attempts == 0: return original_text
+    # --- ROTATION LOGIC (Refactored) ---
+    def worker(api_key):
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model=model_to_use,
+            contents=prompt
+        )
+        return response.text.strip()
 
-    for attempt in range(max_attempts):
-        current_api_key = key_manager.get_current_key()
-        try:
-            client = genai.Client(api_key=current_api_key)
-            response = client.models.generate_content(
-                model=model_to_use,
-                contents=prompt
-            )
-            key_manager.rotate_key()
-            return response.text.strip()
-        except Exception as e:
-            error_msg = str(e)
-            print(f"[{user_label}] ⚠️ Lỗi Scripting (Key ...{current_api_key[-5:]}): {error_msg}")
-            key_manager.rotate_key()
-            time.sleep(1)
-    
-    return "Xin chào, đây là báo cáo sức khỏe của bạn. Hãy kiểm tra tin nhắn văn bản để biết chi tiết."
+    return key_manager.execute_with_retry(
+        worker_func=worker,
+        default_return="Xin chào, đây là báo cáo sức khỏe của bạn. Hãy kiểm tra tin nhắn văn bản để biết chi tiết.",
+        verbose_label=user_label
+    )
 
 def parse_audio_mime_type(mime_type: str) -> Dict[str, Optional[int]]:
     """Parses bits per sample and rate from an audio MIME type string."""
@@ -513,72 +518,53 @@ async def generate_audio_from_text(text, output_file, voice="Sadachbia"):
     
     model_name = "gemini-2.5-flash-preview-tts"
 
-    # --- ROTATION LOGIC for TTS ---
-    max_attempts = key_manager.get_key_count() * 2
-    if max_attempts == 0: return False
+    # --- ROTATION LOGIC for TTS (Refactored) ---
+    def worker(api_key):
+        client = genai.Client(api_key=api_key)
+        contents = [
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=text)],
+            ),
+        ]
+        
+        all_raw_bytes = bytearray()
+        mime_type = None
 
-    for attempt in range(max_attempts):
-        current_api_key = key_manager.get_current_key()
-        try:
-            client = genai.Client(api_key=current_api_key)
+        for chunk in client.models.generate_content_stream(
+            model=model_name,
+            contents=contents,
+            config=generate_content_config,
+        ):
+            if (chunk.candidates is None
+                or chunk.candidates[0].content is None
+                or chunk.candidates[0].content.parts is None):
+                continue
             
-            contents = [
-                types.Content(
-                    role="user",
-                    parts=[types.Part.from_text(text=text)],
-                ),
-            ]
+            part = chunk.candidates[0].content.parts[0]
+            if part.inline_data and part.inline_data.data:
+                if not mime_type:
+                    mime_type = part.inline_data.mime_type
+                all_raw_bytes.extend(part.inline_data.data)
+
+        if len(all_raw_bytes) > 0:
+            final_mime_type = mime_type if mime_type else "audio/L16;rate=24000"
+            wav_data = convert_to_wav(all_raw_bytes, final_mime_type)
+
+            final_output_file = output_file
+            if not final_output_file.lower().endswith(".wav"):
+                    final_output_file = final_output_file.rsplit('.', 1)[0] + ".wav"
             
-            all_raw_bytes = bytearray()
-            mime_type = None
+            # Write file
+            with open(final_output_file, "wb") as f:
+                f.write(wav_data)
+            print(f"✅ Audio saved to {final_output_file}")
+            return True
+        else:
+             raise Exception("Stream finished but no audio data collected.")
 
-            for chunk in client.models.generate_content_stream(
-                model=model_name,
-                contents=contents,
-                config=generate_content_config,
-            ):
-                if (chunk.candidates is None
-                    or chunk.candidates[0].content is None
-                    or chunk.candidates[0].content.parts is None):
-                    continue
-                
-                part = chunk.candidates[0].content.parts[0]
-                if part.inline_data and part.inline_data.data:
-                    if not mime_type:
-                        mime_type = part.inline_data.mime_type
-                    all_raw_bytes.extend(part.inline_data.data)
-
-            if len(all_raw_bytes) > 0:
-                if not mime_type: mime_type = "audio/L16;rate=24000"
-                wav_data = convert_to_wav(all_raw_bytes, mime_type)
-
-                if not output_file.lower().endswith(".wav"):
-                        output_file = output_file.rsplit('.', 1)[0] + ".wav"
-                
-                try:
-                    with open(output_file, "wb") as f:
-                        f.write(wav_data)
-                    print(f"✅ Audio saved to {output_file}")
-                    
-                    # Thành công -> Rotate cho lần sau
-                    key_manager.rotate_key()
-                    return True
-                except Exception as e:
-                        print(f"❌ Error writing file: {e}")
-                        # Lỗi write file thì không cần đổi key, nhưng cứ return False
-                        return False
-            else:
-                print("❌ Stream finished. No audio data collected.")
-                # Có thể do lỗi API trả về stream rỗng -> thử key khác
-                key_manager.rotate_key()
-                continue # Retry next key
-
-        except Exception as e:
-            error_msg = str(e)
-            print(f"⚠️ Lỗi Gemini TTS (Key ...{current_api_key[-5:]}): {error_msg}")
-            
-            # Logic retry tương tự
-            key_manager.rotate_key()
-            time.sleep(2)
-                
-    return False
+    return key_manager.execute_with_retry(
+        worker_func=worker,
+        default_return=False,
+        verbose_label="Gemini TTS"
+    )
