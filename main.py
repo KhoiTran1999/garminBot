@@ -121,7 +121,10 @@ async def handle_workout_analysis(user_config, prompts):
         activities = fetch_daily_activities_detailed(client, today, name)
         
         if not activities:
-            print(f"[{name}] ⚠️ Không có bài tập nào hôm nay.")
+            msg = "Hôm nay bạn không có hoạt động nào để phân tích."
+            print(f"[{name}] ⚠️ {msg}")
+            if tele_id:
+                await send_telegram_report(TELE_TOKEN, f"⚠️ {msg}", tele_id, name, None)
             return
 
         # 3. AI Phân tích chuyên sâu
