@@ -28,3 +28,26 @@ async def send_telegram_report(bot_token, message, chat_id, user_label="User", a
         except Exception as e:
             print(f"[{user_label}] ⚠️ Lỗi gửi Voice: {e}")
 
+async def send_error_alert(bot_token, admin_id, error_message):
+    """
+    Gửi cảnh báo lỗi nghiêm trọng đến Admin Telegram.
+    """
+    if not bot_token or not admin_id:
+        print("⚠️ Không có Token hoặc Admin ID để gửi alert.")
+        return
+
+    bot = Bot(token=bot_token)
+    alert_text = f"🚨 **CRASH ALERT** 🚨\n\nBot đã gặp lỗi nghiêm trọng:\n\n`{error_message}`"
+    
+    try:
+        await bot.send_message(chat_id=admin_id, text=alert_text, parse_mode='Markdown')
+        print("✅ Đã gửi Error Alert cho Admin.")
+    except Exception as e:
+        print(f"❌ Không thể gửi Error Alert: {e}")
+        try:
+             # Fallback plain text if markdown fails
+            await bot.send_message(chat_id=admin_id, text=alert_text.replace('`', '').replace('*', ''), parse_mode=None)
+        except:
+            pass
+
+
