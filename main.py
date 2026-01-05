@@ -8,17 +8,14 @@ from garminconnect import Garmin
 
 # Import Services
 from app.services.notion_service import get_users_from_notion
-from app.services.garmin_service import get_processed_data, fetch_daily_activities_detailed
+from app.services.garmin_service import get_processed_data, fetch_daily_activities_detailed, check_garmin_sync_status
 from app.services.ai_service import get_ai_advice, get_workout_analysis_advice, get_speech_script, generate_audio_from_text
-from app.services.prompt_service import get_prompts_from_notion
 from app.services.prompt_service import get_prompts_from_notion
 from app.services.telegram_service import send_telegram_report, send_error_alert
 
 # --- CẤU HÌNH CHUNG ---
 from app.config import Config
 
-# --- CẤU HÌNH CHUNG ---
-# --- CẤU HÌNH CHUNG ---
 TELE_TOKEN = Config.TELEGRAM_TOKEN
 TELE_ADMIN = Config.TELEGRAM_ADMIN_ID
 
@@ -40,6 +37,16 @@ async def handle_daily_or_sleep(user_config, mode, prompts):
         client.login()
         print(f"[{name}] ✅ Đăng nhập Garmin thành công.")
         
+        # --- FRESHNESS CHECK ---
+        is_fresh, fresh_msg = check_garmin_sync_status(client, max_age_hours=1.0, user_label=name)
+        if not is_fresh:
+            print(f"[{name}] ⛔ {fresh_msg}")
+            if tele_id:
+                # Gửi cảnh báo Telegram
+                await send_telegram_report(TELE_TOKEN, f"⛔ {fresh_msg}", tele_id, name, None)
+            return
+        # -----------------------
+
         today = date.today()
         # today = date(2025, 12, 30) # Dùng khi test ngày cũ
 
@@ -98,6 +105,16 @@ async def handle_workout_analysis(user_config, prompts):
         client.login()
         print(f"[{name}] ✅ Đăng nhập Garmin thành công.")
         
+        # --- FRESHNESS CHECK ---
+        is_fresh, fresh_msg = check_garmin_sync_status(client, max_age_hours=1.0, user_label=name)
+        if not is_fresh:
+            print(f"[{name}] ⛔ {fresh_msg}")
+            if tele_id:
+                # Gửi cảnh báo Telegram
+                await send_telegram_report(TELE_TOKEN, f"⛔ {fresh_msg}", tele_id, name, None)
+            return
+        # -----------------------
+
         today = date.today()
         
         # 2. Lấy dữ liệu bài tập 24h qua

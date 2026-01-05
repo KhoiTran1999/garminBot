@@ -1,8 +1,61 @@
-from datetime import timedelta
+from datetime import timedelta, datetime, date
+import pytz
 from app.utils.metrics import calculate_readiness_score, calculate_trimp_banister, seconds_to_text
 
 # Cấu hình cửa sổ quét (7 ngày cho Acute Load)
 DAYS_WINDOW = 7
+
+def check_garmin_sync_status(client, max_age_hours=1.0, user_label="User"):
+    """
+    Kiểm tra xem thiết bị có được sync trong khoảng thời gian cho phép hay không.
+    Trả về: (is_fresh: bool, message: str)
+    """
+    print(f"[{user_label}] ⌚ Checking device sync freshness (Max Age: {max_age_hours}h)...")
+    
+    last_sync_ts = 0
+    device_name = "Unknown Device"
+    source = "None"
+
+    # --- CÁCH 1: Check Last Used Device (Ưu tiên số 1) ---
+    try:
+        last_used = client.get_device_last_used()
+        if last_used:
+            last_sync_ts = last_used.get("lastUsedDeviceUploadTime", 0)
+            if last_sync_ts > 0: last_sync_ts = last_sync_ts / 1000
+            device_name = last_used.get("lastUsedDeviceName") or last_used.get("deviceName")
+            source = "LastUsed"
+    except Exception as e:
+        print(f"[{user_label}] ⚠️ Check Last Used Error: {e}")
+
+    # --- CÁCH 2: Check User Summary (Fallback) ---
+    if last_sync_ts == 0:
+        try:
+            today_iso = date.today().isoformat()
+            summary = client.get_user_summary(today_iso)
+            last_sync_ts = summary.get("lastSyncTimestampGMT", 0)
+            if last_sync_ts > 0: last_sync_ts = last_sync_ts / 1000
+            source = "UserSummary"
+        except Exception:
+            pass
+
+    # --- EVALUATE ---
+    if last_sync_ts == 0:
+        return False, "Không tìm thấy dữ liệu đồng bộ nào."
+
+    # Convert timestamps
+    vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+    last_sync_dt = datetime.fromtimestamp(last_sync_ts, vn_tz)
+    now_vn = datetime.now(vn_tz)
+    
+    diff = now_vn - last_sync_dt
+    diff_hours = diff.total_seconds() / 3600
+    
+    time_str = last_sync_dt.strftime("%H:%M %d/%m")
+    
+    if diff_hours <= max_age_hours:
+        return True, f"✅ Data synced {time_str} ({int(diff_hours*60)} min ago)."
+    else:
+        return False, f"⚠️ Dữ liệu cũ (Sync lúc {time_str} - {int(diff_hours)}h trước). Vui lòng mở App Garmin Connect để đồng bộ."
 
 def get_sleep_analysis(client, date_str, user_label="User"):
     """
