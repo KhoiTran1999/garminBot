@@ -1,0 +1,36 @@
+name: Telegram On-Demand Trigger
+
+on:
+  # Sự kiện này cho phép Cloudflare Worker gọi vào
+  repository_dispatch:
+    types: [telegram_command]
+
+jobs:
+  run-bot-command:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run Bot Mode
+        # Lấy tham số 'mode' từ Cloudflare gửi lên để chạy đúng chức năng
+        run: python main.py --mode ${{ github.event.client_payload.mode }}
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # Thêm các key dự phòng nếu có
+          GEMINI_API_KEY_1: ${{ secrets.GEMINI_API_KEY_1 }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          NOTION_PROMPT_DATABASE_ID: ${{ secrets.NOTION_PROMPT_DATABASE_ID }}
+          # Nếu bạn có set Admin ID trong secret
+          TELEGRAM_ADMIN_ID: ${{ secrets.TELEGRAM_ADMIN_ID }}
