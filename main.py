@@ -149,17 +149,35 @@ async def handle_workout_analysis(user_config, prompts):
 async def main():
     parser = argparse.ArgumentParser(description="Garmin AI Coach Pro")
     parser.add_argument("--mode", default="daily", help="Mode: daily | sleep_analysis | workout")
+    
+    # 1. THÊM DÒNG NÀY: Nhận tham số tele_id từ GitHub Action
+    parser.add_argument("--tele_id", default=None, help="Filter specific user by Telegram ID")
+    
     args = parser.parse_args()
     mode = args.mode
+    filter_tele_id = args.tele_id # Lấy ID cần lọc
 
     print(f"=== GARMIN AI COACH PRO: MODE {mode.upper()} ===")
+    if filter_tele_id:
+        print(f"🎯 Filter User ID: {filter_tele_id}")
     
     try:
         # 1. Lấy user từ Notion
-        users = get_users_from_notion()
-        if not users:
+        all_users = get_users_from_notion()
+        if not all_users:
             print("⚠️ Không tìm thấy user nào Active trên Notion.")
             return
+
+        # 2. LỌC USER: Nếu có filter_tele_id thì chỉ giữ lại user đó
+        if filter_tele_id:
+            # Lưu ý: telegram_chat_id trong notion_service.py đang lấy về dạng string (get_text)
+            users = [u for u in all_users if str(u.get('telegram_chat_id')) == str(filter_tele_id)]
+            
+            if not users:
+                print(f"⚠️ Không tìm thấy User nào có Chat ID: {filter_tele_id} (hoặc User đó chưa Active trên Notion).")
+                return
+        else:
+            users = all_users
 
         print(f"🚀 Kích hoạt quy trình cho {len(users)} người dùng...")
         
