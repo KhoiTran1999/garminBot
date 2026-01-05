@@ -7,9 +7,7 @@ from datetime import datetime
 from typing import Optional, Dict
 from google import genai
 from google.genai import types
-from dotenv import load_dotenv
-
-load_dotenv()
+from app.config import Config
 
 class GeminiKeyManager:
     """
@@ -21,25 +19,8 @@ class GeminiKeyManager:
         self.current_index = 0
 
     def _load_keys(self):
-        # 1. Load key chính
-        main_key = os.getenv("GEMINI_API_KEY")
-        if main_key:
-            self.keys.append(main_key)
-        
-        # 2. Load các key phụ (GEMINI_API_KEY_1, GEMINI_API_KEY_2, ...)
-        i = 1
-        while True:
-            key = os.getenv(f"GEMINI_API_KEY_{i}")
-            if key:
-                self.keys.append(key)
-                i += 1
-            else:
-                break
-        
-        if not self.keys:
-            print("⚠️ CẢNH BÁO: Không tìm thấy GEMINI_API_KEY nào trong .env!")
-        else:
-            print(f"🔑 Đã load {len(self.keys)} Gemini API Keys.")
+        self.keys = Config.GEMINI_API_KEYS
+        print(f"🔑 Loaded {len(self.keys)} Gemini Keys from Config.")
 
     def get_current_key(self):
         if not self.keys:

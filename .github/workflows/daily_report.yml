@@ -30,4 +30,4 @@ jobs:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
           NOTION_PROMPT_DATABASE_ID: ${{ secrets.NOTION_PROMPT_DATABASE_ID }}
-        run: python main.py --mode daily_report
+        run: python main.py --mode daily

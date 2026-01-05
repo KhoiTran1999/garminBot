@@ -2,16 +2,15 @@ import os
 import httpx
 from dotenv import load_dotenv
 
-# Load biến môi trường nếu chạy local
-load_dotenv()
+from app.config import Config
 
 def get_users_from_notion():
     """
     Kết nối Notion, lấy danh sách user có trạng thái Active = True.
     Trả về list các dict user.
     """
-    token = os.getenv("NOTION_TOKEN")
-    database_id = os.getenv("NOTION_DATABASE_ID")
+    token = Config.NOTION_TOKEN
+    database_id = Config.NOTION_DATABASE_ID
 
     if not token or not database_id:
         print("❌ Lỗi: Thiếu cấu hình NOTION_TOKEN hoặc NOTION_DATABASE_ID.")

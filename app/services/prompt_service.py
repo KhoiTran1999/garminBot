@@ -2,7 +2,7 @@ import os
 import httpx
 from dotenv import load_dotenv
 
-load_dotenv()
+from app.config import Config
 
 def get_prompts_from_notion():
     """
@@ -10,8 +10,8 @@ def get_prompts_from_notion():
     Returns a dictionary where keys are the 'Name' (title) of the prompt 
     and values are the 'Content' (rich_text) of the prompt.
     """
-    token = os.getenv("NOTION_TOKEN")
-    database_id = os.getenv("NOTION_PROMPT_DATABASE_ID")
+    token = Config.NOTION_TOKEN
+    database_id = Config.NOTION_PROMPT_DATABASE_ID
 
     if not token or not database_id:
         print("⚠️ Warning: Missing NOTION_TOKEN or NOTION_PROMPT_DATABASE_ID. Using default prompts may fail if not handled.")
