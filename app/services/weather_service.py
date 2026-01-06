@@ -1,7 +1,7 @@
 import requests
 from typing import Dict, Any, Optional
 
-WAQI_API_URL = "https://api.waqi.info/feed/A476167/?token=70adc343f004e025d9387640a136716cd4a1c0f2"
+WAQI_API_URL = "https://api.waqi.info/feed/A565432/?token=70adc343f004e025d9387640a136716cd4a1c0f2"
 
 class WeatherService:
     @staticmethod
