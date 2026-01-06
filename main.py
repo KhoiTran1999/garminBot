@@ -12,6 +12,7 @@ from app.services.garmin_service import get_processed_data, fetch_daily_activiti
 from app.services.ai_service import get_ai_advice, get_workout_analysis_advice, get_speech_script, generate_audio_from_text
 from app.services.prompt_service import get_prompts_from_notion
 from app.services.telegram_service import send_telegram_report, send_error_alert
+from app.services.weather_service import WeatherService
 
 # --- CẤU HÌNH CHUNG ---
 from app.config import Config
@@ -54,6 +55,9 @@ async def handle_daily_or_sleep(user_config, mode, prompts):
         r_data, r_score, l_data = get_processed_data(client, today, name)
 
         # 2. Gọi AI
+        # Lấy thông tin thời tiết (AQI)
+        aqi_data = WeatherService.get_aqi_data()
+        
         prompt_key = "sleep_analysis" if mode == "sleep_analysis" else "daily_report"
         advice_template = prompts.get(prompt_key)
         
@@ -62,7 +66,7 @@ async def handle_daily_or_sleep(user_config, mode, prompts):
         else:
             print(f"[{name}] ⚠️ Prompt '{prompt_key}' not found in Notion. Using Hardcoded Fallback.")
 
-        ai_report = get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=advice_template, mode=mode)
+        ai_report = get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=advice_template, mode=mode, aqi_data=aqi_data)
 
         # 3. Tạo Voice Script & Audio
         voice_template = prompts.get("voice_script")
@@ -128,13 +132,16 @@ async def handle_workout_analysis(user_config, prompts):
             return
 
         # 3. AI Phân tích chuyên sâu
+        # Lấy thông tin thời tiết (AQI)
+        aqi_data = WeatherService.get_aqi_data()
+        
         workout_template = prompts.get("workout_analysis")
         if workout_template:
             print(f"[{name}] ℹ️ Using Prompt: 'workout_analysis' (Model: {workout_template.get('model', 'default')})")
         else:
              print(f"[{name}] ⚠️ Prompt 'workout_analysis' not found in Notion. Using Fallback.")
 
-        ai_report = get_workout_analysis_advice(activities, user_config, prompt_template=workout_template)
+        ai_report = get_workout_analysis_advice(activities, user_config, prompt_template=workout_template, aqi_data=aqi_data)
         
         if not ai_report:
             print(f"[{name}] ⚠️ Không tạo được báo cáo AI.")

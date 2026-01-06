@@ -77,7 +77,7 @@ class GeminiKeyManager:
 # Khởi tạo Global Instance
 key_manager = GeminiKeyManager()
 
-def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=None, mode="daily"):
+def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=None, mode="daily", aqi_data=None):
     """
     Gọi AI để lấy lời khuyên. Tự động xoay key khi gặp lỗi Quota.
     """
@@ -103,6 +103,11 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
     if r_data.get('avg_waking_resp'):
         resp_text = (f"Waking Avg {int(r_data['avg_waking_resp'])} brpm | Sleep Avg {int(r_data['avg_sleep_resp'])} brpm | "
                         f"Min {int(r_data['min_resp'])} - Max {int(r_data['max_resp'])}")
+
+    # AQI Data
+    aqi_text = "Không có dữ liệu"
+    if aqi_data:
+        aqi_text = f"AQI: {aqi_data.get('aqi', 'N/A')} | PM2.5: {aqi_data.get('pm25', 'N/A')} (Location: {aqi_data.get('city', 'Unknown')})"
 
     
     # Pre-calculate derived values for safe formatting
@@ -134,7 +139,8 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
                 activities_text=activities_text,
                 nap_text=nap_text,
                 spo2_text=spo2_text,
-                resp_text=resp_text
+                resp_text=resp_text,
+                aqi_info=aqi_text
             )
             
             # Concatenate System + User. Or better: keep them separate if API supports. 
@@ -161,7 +167,8 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
                 activities_text=activities_text,
                 nap_text=nap_text,
                 spo2_text=spo2_text,
-                resp_text=resp_text
+                resp_text=resp_text,
+                aqi_info=aqi_text
             )
          except Exception as e:
             print(f"[{user_label}] ⚠️ Error formatting Notion string prompt ({mode}): {e}")
@@ -187,6 +194,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
         - **Nhịp tim nghỉ (RHR):** {r_data['rhr']} bpm
         - **SpO2 (Oxy máu):** {spo2_text}
         - **Hô hấp (Respiration):** {resp_text}
+        - **Chất lượng không khí (AQI):** {aqi_text}
 
         YÊU CẦU OUTPUT (Markdown Telegram):
         Trả về báo cáo ngắn gọn, tập trung vào chất lượng giấc ngủ và sự sẵn sàng cho ngày mới:
@@ -223,6 +231,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
         - **Nhịp tim nghỉ (RHR):** {r_data['rhr']} bpm
         - **SpO2:** {spo2_text}
         - **Hô hấp:** {resp_text}
+        - **AQI (Không khí):** {aqi_text}
 
         TẢI TẬP LUYỆN (7 NGÀY):
         - **Tải trung bình ngày (Acute Load):** {int(l_data['avg_daily_load'])} (TRIMP Index)
@@ -262,7 +271,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
         verbose_label=user_label
     )
 
-def get_workout_analysis_advice(activity_data_list, user_config, prompt_template=None):
+def get_workout_analysis_advice(activity_data_list, user_config, prompt_template=None, aqi_data=None):
     """
     Phân tích chi tiết (Time-series) các bài tập trong 24h.
     """
@@ -281,6 +290,11 @@ def get_workout_analysis_advice(activity_data_list, user_config, prompt_template
     vn_timezone = pytz.timezone('Asia/Ho_Chi_Minh')
     current_now = datetime.now(vn_timezone).strftime("%H:%M:%S, %d/%m/%Y")
 
+    # AQI Data
+    aqi_text = "Không có dữ liệu"
+    if aqi_data:
+        aqi_text = f"AQI: {aqi_data.get('aqi', 'N/A')} | PM2.5: {aqi_data.get('pm25', 'N/A')} (Location: {aqi_data.get('city', 'Unknown')})"
+
     formatted_prompt = None
     model_to_use = "gemini-3-flash-preview"
 
@@ -294,7 +308,8 @@ def get_workout_analysis_advice(activity_data_list, user_config, prompt_template
                 user_label=user_label,
                 goal=goal,
                 current_now=current_now,
-                activities_json=activities_json
+                activities_json=activities_json,
+                aqi_info=aqi_text
             )
             formatted_prompt = f"{sys_p}\n\n{formatted_user}"
         except Exception as e:
@@ -307,7 +322,8 @@ def get_workout_analysis_advice(activity_data_list, user_config, prompt_template
                 user_label=user_label,
                 goal=goal,
                 current_now=current_now,
-                activities_json=activities_json
+                activities_json=activities_json,
+                aqi_info=aqi_text
             )
         except Exception as e:
             print(f"[{user_label}] ⚠️ Error formatting Notion workout prompt: {e}")
@@ -322,6 +338,7 @@ def get_workout_analysis_advice(activity_data_list, user_config, prompt_template
         Thời gian báo cáo: {current_now}
         
         MỤC TIÊU VĐV: {goal}
+        THÔNG TIN MÔI TRƯỜNG (AQI): {aqi_text}
         
         DỮ LIỆU CHI TIẾT (JSON):
         {activities_json}
