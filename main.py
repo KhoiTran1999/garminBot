@@ -20,6 +20,27 @@ from app.config import Config
 TELE_TOKEN = Config.TELEGRAM_TOKEN
 TELE_ADMIN = Config.TELEGRAM_ADMIN_ID
 
+def login_garmin(email, password, name):
+    """
+    Đăng nhập Garmin có check token cache để tránh 429 (Too Many Requests).
+    """
+    token_dir = os.path.join(os.getcwd(), "tokens", email)
+    client = Garmin(email, password)
+    try:
+        client.login(tokenstore=token_dir)
+        print(f"[{name}] ✅ Đăng nhập Garmin bằng Token bảo lưu thành công.")
+    except Exception as e:
+        print(f"[{name}] ℹ️ Không dùng được Token. Chuyển sang đăng nhập Password...")
+        client.login()
+        try:
+            os.makedirs(token_dir, exist_ok=True)
+            client.garth.dump(token_dir)
+            print(f"[{name}] ✅ Đăng nhập Garmin thành công & đã lưu Token mới.")
+        except Exception as save_err:
+            print(f"[{name}] ⚠️ Lỗi lưu Token: {save_err}")
+    return client
+
+
 async def handle_daily_or_sleep(user_config, mode, prompts):
     """
     Xử lý báo cáo hàng ngày (Daily) hoặc phân tích giấc ngủ (Sleep Analysis).
@@ -34,9 +55,7 @@ async def handle_daily_or_sleep(user_config, mode, prompts):
         return
 
     try:
-        client = Garmin(email, password)
-        client.login()
-        print(f"[{name}] ✅ Đăng nhập Garmin thành công.")
+        client = login_garmin(email, password, name)
         
         # --- FRESHNESS CHECK ---
         is_fresh, fresh_msg = check_garmin_sync_status(client, max_age_hours=1.0, user_label=name)
@@ -105,9 +124,7 @@ async def handle_workout_analysis(user_config, prompts):
 
     try:
         # 1. Login Garmin
-        client = Garmin(email, password)
-        client.login()
-        print(f"[{name}] ✅ Đăng nhập Garmin thành công.")
+        client = login_garmin(email, password, name)
         
         # --- FRESHNESS CHECK ---
         is_fresh, fresh_msg = check_garmin_sync_status(client, max_age_hours=1.0, user_label=name)
