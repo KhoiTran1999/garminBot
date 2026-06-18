@@ -29,6 +29,8 @@ jobs:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
           NOTION_PROMPT_DATABASE_ID: ${{ secrets.NOTION_PROMPT_DATABASE_ID }}
+          GARMINTOKENS_TRANQUOCKHOI1999_GMAIL_COM: ${{ secrets.GARMINTOKENS_TRANQUOCKHOI1999_GMAIL_COM }}
+          GARMINTOKENS_KYTRAN0102_GMAIL_COM: ${{ secrets.GARMINTOKENS_KYTRAN0102_GMAIL_COM }}
         # THAY ĐỔI Ở ĐÂY: Thêm tham số --tele_id
         run: |
           python main.py \
