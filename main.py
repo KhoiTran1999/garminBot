@@ -24,11 +24,41 @@ def login_garmin(email, password, name):
     """
     Đăng nhập Garmin có check token cache để tránh 429 (Too Many Requests).
     """
+    # Hỗ trợ lấy Token từ GitHub Secrets (môi trường CI/CD không lưu được file)
+    env_token_key = f"GARMINTOKENS_{email.replace('@', '_').replace('.', '_').upper()}"
+    token_string = os.getenv(env_token_key) or os.getenv("GARMINTOKENS")
+    
     token_dir = os.path.join(os.getcwd(), "tokens", email)
+    os.makedirs(token_dir, exist_ok=True)
     client = Garmin(email, password)
+
     try:
-        client.login(tokenstore=token_dir)
-        print(f"[{name}] ✅ Đăng nhập Garmin bằng Token bảo lưu thành công.")
+        if token_string:
+            # Ghi token từ GitHub Secret ra file để garminconnect đọc
+            import base64
+            try:
+                # Ghi tạm chuỗi base64 gốc vào env để thư viện garminconnect tự xử lý (cách mới)
+                os.environ["GARMINTOKENS"] = token_string
+                client.login(tokenstore=token_string)
+                print(f"[{name}] ✅ Đăng nhập Garmin bằng Token từ GitHub Secrets thành công.")
+            except Exception as e1:
+                print(f"[{name}] ⚠️ Lỗi đọc trực tiếp token_string, thử decode ra file... {e1}")
+                # Cách cũ: decode và lưu thành file oauth1 và oauth2
+                import json
+                try:
+                    tokens = json.loads(base64.b64decode(token_string).decode('utf-8'))
+                    with open(os.path.join(token_dir, "oauth1_token.json"), "w") as f1:
+                        json.dump(tokens[0], f1)
+                    with open(os.path.join(token_dir, "oauth2_token.json"), "w") as f2:
+                        json.dump(tokens[1], f2)
+                    client.login(tokenstore=token_dir)
+                    print(f"[{name}] ✅ Đăng nhập Garmin bằng Token decode từ Secrets thành công.")
+                except Exception as e2:
+                    print(f"[{name}] ⚠️ Lỗi decode token: {e2}. Chuyển sang password.")
+                    raise e2
+        else:
+            client.login(tokenstore=token_dir)
+            print(f"[{name}] ✅ Đăng nhập Garmin bằng Token bảo lưu thành công.")
     except Exception as e:
         print(f"[{name}] ℹ️ Không dùng được Token. Chuyển sang đăng nhập Password...")
         client.login()
