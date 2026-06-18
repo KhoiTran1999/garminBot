@@ -3,8 +3,12 @@ import asyncio
 import argparse
 from datetime import date
 import time
+import logging
 from dotenv import load_dotenv
 from garminconnect import Garmin
+
+# Tắt cảnh báo 429 từ garminconnect
+logging.getLogger("garminconnect").setLevel(logging.CRITICAL)
 
 # Import Services
 from app.services.notion_service import get_users_from_notion
