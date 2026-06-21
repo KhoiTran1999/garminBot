@@ -19,12 +19,12 @@ async def send_telegram_report(bot_token, message, chat_id, user_label="User", a
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     try:
-        await bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown', reply_markup=reply_markup)
+        await bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
         print(f"[{user_label}] ✅ Gửi thành công!")
     except Exception as e:
         print(f"[{user_label}] ⚠️ Lỗi Markdown, đang gửi Plain Text...")
         try:
-            await bot.send_message(chat_id=chat_id, text=message, parse_mode=None, reply_markup=reply_markup)
+            await bot.send_message(chat_id=chat_id, text=message, parse_mode=None)
         except Exception as e2:
             print(f"❌ Lỗi gửi tin nhắn: {e2}")
 
