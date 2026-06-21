@@ -5,6 +5,76 @@ from app.utils.metrics import calculate_readiness_score, calculate_trimp_baniste
 # Cấu hình cửa sổ quét (7 ngày cho Acute Load)
 DAYS_WINDOW = 7
 
+def get_time_series_stress_bb(client, date_iso, user_label="User"):
+    """
+    Rút gọn biểu đồ Stress và Body Battery thành các block 2h để tiết kiệm token cho AI
+    """
+    try:
+        all_day_stress = client.get_all_day_stress(date_iso)
+        if not all_day_stress:
+            return "Không có dữ liệu biểu đồ."
+
+        stress_vals = all_day_stress.get('stressValuesArray', [])
+        bb_vals = all_day_stress.get('bodyBatteryValuesArray', [])
+
+        if not stress_vals and not bb_vals:
+            return "Không có dữ liệu biểu đồ."
+
+        vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+
+        # 12 blocks, index 0 to 11 (0=0-2h, 1=2-4h...)
+        blocks = {i: {"stress_sum": 0, "stress_count": 0, "bb_first": None, "bb_last": None} for i in range(12)}
+
+        def assign_to_block(vals_array, val_type):
+            for item in vals_array:
+                if len(item) != 2: continue
+                ts_ms, val = item
+                if val is None or val < 0: continue # Bỏ qua data rỗng hoặc -1
+
+                dt = datetime.fromtimestamp(ts_ms / 1000, vn_tz)
+                block_idx = dt.hour // 2
+
+                b = blocks[block_idx]
+                if val_type == "stress":
+                    b["stress_sum"] += val
+                    b["stress_count"] += 1
+                elif val_type == "bb":
+                    if b["bb_first"] is None:
+                        b["bb_first"] = val
+                    b["bb_last"] = val
+
+        assign_to_block(stress_vals, "stress")
+        assign_to_block(bb_vals, "bb")
+
+        lines = []
+        for i in range(12):
+            b = blocks[i]
+            if b["stress_count"] == 0 and b["bb_first"] is None:
+                continue
+
+            time_label = f"{i*2:02d}:00-{(i+1)*2:02d}:00"
+            parts = []
+
+            if b["stress_count"] > 0:
+                avg_stress = b["stress_sum"] // b["stress_count"]
+                parts.append(f"Stress {avg_stress}")
+
+            if b["bb_first"] is not None and b["bb_last"] is not None:
+                diff = b["bb_last"] - b["bb_first"]
+                sign = "+" if diff > 0 else ""
+                parts.append(f"Pin {sign}{diff}")
+
+            if parts:
+                lines.append(f"  [{time_label}] {' | '.join(parts)}")
+
+        if not lines:
+            return "Không có dữ liệu biểu đồ."
+
+        return "\n".join(lines)
+    except Exception as e:
+         print(f"[{user_label}] ⚠️ Lỗi xử lý timeseries 24h: {e}")
+         return "Lỗi lấy biểu đồ 24h."
+
 def check_garmin_sync_status(client, max_age_hours=1.0, user_label="User"):
     """
     Kiểm tra xem thiết bị có được sync trong khoảng thời gian cho phép hay không.
@@ -97,7 +167,8 @@ def get_processed_data(client, today, user_label="User"):
     readiness_data = {
         "rhr": 0, "stress": 0, "body_battery": 0,
         "sleep_hours": 0, "nap_seconds": 0, "sleep_text": "Chưa có dữ liệu",
-        "hrv_status": None, "last_night_hrv": None, "training_status": None
+        "hrv_status": None, "last_night_hrv": None, "training_status": None,
+        "timeseries_text": "Không có dữ liệu"
     }
     date_iso = today.isoformat()
 
@@ -154,6 +225,9 @@ def get_processed_data(client, today, user_label="User"):
 
         ts_data = get_training_status(client, date_iso) or {}
         readiness_data['training_status'] = ts_data.get('trainingStatus')
+
+        # Biểu đồ mảng (Timeseries)
+        readiness_data['timeseries_text'] = get_time_series_stress_bb(client, date_iso, user_label)
     except Exception as e:
         print(f"[{user_label}] ⚠️ Lỗi lấy HRV/Training Status: {e}")
 

@@ -112,6 +112,8 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
     if r_data.get('training_status'):
         training_status_text = r_data.get('training_status')
 
+    timeseries_text = r_data.get('timeseries_text', "Không có dữ liệu")
+
     # AQI Data
     aqi_text = "Không có dữ liệu"
     if aqi_data:
@@ -150,6 +152,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
                 resp_text=resp_text,
                 hrv_text=hrv_text,
                 training_status_text=training_status_text,
+                timeseries_text=timeseries_text,
                 aqi_info=aqi_text
             )
             
@@ -180,6 +183,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
                 resp_text=resp_text,
                 hrv_text=hrv_text,
                 training_status_text=training_status_text,
+                timeseries_text=timeseries_text,
                 aqi_info=aqi_text
             )
          except Exception as e:
@@ -209,6 +213,9 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
         - **Hô hấp (Respiration):** {resp_text}
         - **Trạng thái tập luyện (Training Status):** {training_status_text}
         - **Chất lượng không khí (AQI):** {aqi_text}
+
+        BIẾN ĐỘNG TRONG NGÀY (2-hour blocks):
+{timeseries_text}
 
         YÊU CẦU OUTPUT (Markdown Telegram):
         Trả về báo cáo ngắn gọn, tập trung vào chất lượng giấc ngủ và sự sẵn sàng cho ngày mới:
@@ -248,6 +255,9 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
         - **SpO2:** {spo2_text}
         - **Hô hấp:** {resp_text}
         - **AQI (Không khí):** {aqi_text}
+
+        BIẾN ĐỘNG TRONG NGÀY (2-hour blocks):
+{timeseries_text}
 
         TẢI TẬP LUYỆN (7 NGÀY):
         - **Tải trung bình ngày (Acute Load):** {int(l_data['avg_daily_load'])} (TRIMP Index)
