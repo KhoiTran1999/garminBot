@@ -5,9 +5,10 @@ from app.utils.metrics import calculate_readiness_score, calculate_trimp_baniste
 # Cấu hình cửa sổ quét (7 ngày cho Acute Load)
 DAYS_WINDOW = 7
 
-def get_time_series_stress_bb(client, date_iso, user_label="User"):
+def get_time_series_stress_bb(client, date_iso, activities, user_label="User"):
     """
-    Rút gọn biểu đồ Stress và Body Battery thành các block 2h để tiết kiệm token cho AI
+    Rút gọn biểu đồ Stress và Body Battery thành các block 2h để tiết kiệm token cho AI,
+    kèm theo mapping các hoạt động thể dục vào từng block.
     """
     try:
         all_day_stress = client.get_all_day_stress(date_iso)
@@ -17,14 +18,28 @@ def get_time_series_stress_bb(client, date_iso, user_label="User"):
         stress_vals = all_day_stress.get('stressValuesArray', [])
         bb_vals = all_day_stress.get('bodyBatteryValuesArray', [])
 
-        if not stress_vals and not bb_vals:
+        if not stress_vals and not bb_vals and not activities:
             return "Không có dữ liệu biểu đồ."
 
         vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
 
         # 12 blocks, index 0 to 11 (0=0-2h, 1=2-4h...)
-        blocks = {i: {"stress_sum": 0, "stress_count": 0, "bb_first": None, "bb_last": None} for i in range(12)}
+        blocks = {i: {"stress_sum": 0, "stress_count": 0, "bb_first": None, "bb_last": None, "activity_names": []} for i in range(12)}
 
+        # 1. Gán activities vào blocks
+        for act in activities:
+            start_time_local = act.get('startTimeLocal') # Format: 'YYYY-MM-DD HH:MM:SS'
+            if start_time_local and start_time_local.startswith(date_iso):
+                try:
+                    time_part = start_time_local.split(' ')[1]
+                    hour = int(time_part.split(':')[0])
+                    block_idx = hour // 2
+                    act_name = act.get('activityName', 'Tập luyện')
+                    blocks[block_idx]["activity_names"].append(act_name)
+                except Exception as e:
+                    print(f"[{user_label}] ⚠️ Lỗi parse time activity {start_time_local}: {e}")
+
+        # 2. Gán stress và bb
         def assign_to_block(vals_array, val_type):
             for item in vals_array:
                 if len(item) != 2: continue
@@ -49,7 +64,7 @@ def get_time_series_stress_bb(client, date_iso, user_label="User"):
         lines = []
         for i in range(12):
             b = blocks[i]
-            if b["stress_count"] == 0 and b["bb_first"] is None:
+            if b["stress_count"] == 0 and b["bb_first"] is None and not b["activity_names"]:
                 continue
 
             time_label = f"{i*2:02d}:00-{(i+1)*2:02d}:00"
@@ -63,6 +78,10 @@ def get_time_series_stress_bb(client, date_iso, user_label="User"):
                 diff = b["bb_last"] - b["bb_first"]
                 sign = "+" if diff > 0 else ""
                 parts.append(f"Pin {sign}{diff}")
+
+            if b["activity_names"]:
+                act_str = ", ".join(b["activity_names"])
+                parts.append(f"Tập: {act_str}")
 
             if parts:
                 lines.append(f"  [{time_label}] {' | '.join(parts)}")
@@ -226,31 +245,34 @@ def get_processed_data(client, today, user_label="User"):
         ts_data = get_training_status(client, date_iso) or {}
         readiness_data['training_status'] = ts_data.get('trainingStatus')
 
-        # Biểu đồ mảng (Timeseries)
-        readiness_data['timeseries_text'] = get_time_series_stress_bb(client, date_iso, user_label)
     except Exception as e:
         print(f"[{user_label}] ⚠️ Lỗi lấy HRV/Training Status: {e}")
 
     readiness_score = calculate_readiness_score(readiness_data)
 
-    # --- C. Training Load (7 ngày) ---
+    # --- C. Training Load (7 ngày) & Activities hôm nay ---
     load_stats = {"avg_daily_load": 0, "final_calc_max_hr": 0, "raw_activities_for_ai": []}
-    
+    today_activities = []
+
     try:
         start_date = today - timedelta(days=DAYS_WINDOW - 1)
         activities = client.get_activities_by_date(start_date.isoformat(), date_iso, "")
-        
+
         current_max_hr = 185
         rhr_input = readiness_data['rhr'] if readiness_data['rhr'] > 30 else 55
         total_trimp = 0
-        
+
         for act in activities:
             name = act.get('activityName', 'Unknown')
             duration_min = act.get('duration', 0) / 60
             avg_hr = act.get('averageHR', 0)
             mx_hr = act.get('maxHR', 0)
-            date_str = act.get('startTimeLocal', '')[:10]
-            
+            act_date_str = act.get('startTimeLocal', '')[:10]
+
+            # Lọc riêng activities của ngày hôm nay để truyền vào Timeseries
+            if act_date_str == date_iso:
+                today_activities.append(act)
+
             if mx_hr > load_stats['final_calc_max_hr']:
                 load_stats['final_calc_max_hr'] = mx_hr
                 if mx_hr > 160: current_max_hr = mx_hr
@@ -259,10 +281,10 @@ def get_processed_data(client, today, user_label="User"):
             if avg_hr > rhr_input:
                 trimp = calculate_trimp_banister(duration_min, avg_hr, rhr_input, current_max_hr)
             total_trimp += trimp
-            
-            if trimp > 10: 
+
+            if trimp > 10:
                 load_stats['raw_activities_for_ai'].append(
-                    f"- {date_str}: {name} ({int(duration_min)}p) | MaxHR {mx_hr} | TRIMP {int(trimp)}"
+                    f"- {act_date_str}: {name} ({int(duration_min)}p) | MaxHR {mx_hr} | TRIMP {int(trimp)}"
                 )
 
         load_stats['avg_daily_load'] = total_trimp / DAYS_WINDOW
@@ -270,6 +292,12 @@ def get_processed_data(client, today, user_label="User"):
 
     except Exception as e:
         print(f"[{user_label}] ⚠️ Lỗi lấy Activities: {e}")
+
+    # --- D. Biểu đồ mảng (Timeseries) có tích hợp Activity ---
+    try:
+        readiness_data['timeseries_text'] = get_time_series_stress_bb(client, date_iso, today_activities, user_label)
+    except Exception as e:
+        print(f"[{user_label}] ⚠️ Lỗi lấy Timeseries: {e}")
 
     return readiness_data, readiness_score, load_stats
 
