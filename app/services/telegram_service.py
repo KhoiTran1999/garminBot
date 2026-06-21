@@ -61,3 +61,11 @@ async def send_error_alert(bot_token, admin_id, error_message):
             pass
 
 
+
+async def send_progress_update(bot_token, message, chat_id, user_label="User"):
+    if not bot_token or not chat_id: return
+    try:
+        bot = Bot(token=bot_token)
+        await bot.send_message(chat_id=chat_id, text=message)
+    except Exception as e:
+        print(f"[{user_label}] ⚠️ Lỗi progress: {e}")

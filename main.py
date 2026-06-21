@@ -15,7 +15,7 @@ from app.services.notion_service import get_users_from_notion
 from app.services.garmin_service import get_processed_data, fetch_daily_activities_detailed, check_garmin_sync_status
 from app.services.ai_service import get_ai_advice, get_workout_analysis_advice, get_battery_analysis_advice, get_speech_script, generate_audio_from_text
 from app.services.prompt_service import get_prompts_from_notion
-from app.services.telegram_service import send_telegram_report, send_error_alert
+from app.services.telegram_service import send_telegram_report, send_error_alert, send_progress_update
 from app.services.weather_service import WeatherService
 
 # --- CẤU HÌNH CHUNG ---
@@ -107,6 +107,9 @@ async def handle_daily_or_sleep(user_config, mode, prompts):
         # 1. Lấy dữ liệu Garmin (Sleep + Stats)
         r_data, r_score, l_data = get_processed_data(client, today, name)
 
+        if tele_id:
+            await send_progress_update(TELE_TOKEN, "✅ Đã đồng bộ. 🧠 Đang phân tích dữ liệu bằng AI...", tele_id, name)
+
         # 2. Gọi AI
         # Lấy thông tin thời tiết (AQI)
         aqi_data = WeatherService.get_aqi_data()
@@ -122,6 +125,9 @@ async def handle_daily_or_sleep(user_config, mode, prompts):
         ai_report = get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=advice_template, mode=mode, aqi_data=aqi_data)
 
         # 3. Tạo Voice Script & Audio
+        if tele_id:
+            await send_progress_update(TELE_TOKEN, "✅ Phân tích xong. 🎙️ Đang tạo bản thu âm...", tele_id, name)
+
         voice_template = prompts.get("voice_script")
         speech_script = get_speech_script(ai_report, user_config, prompt_template=voice_template, mode=mode)
         
@@ -182,6 +188,9 @@ async def handle_workout_analysis(user_config, prompts):
                 await send_telegram_report(TELE_TOKEN, f"⚠️ {msg}", tele_id, name, None)
             return
 
+        if tele_id:
+            await send_progress_update(TELE_TOKEN, "✅ Đã đồng bộ. 🧠 Đang phân tích dữ liệu bằng AI...", tele_id, name)
+
         # 3. AI Phân tích chuyên sâu
         # Lấy thông tin thời tiết (AQI)
         aqi_data = WeatherService.get_aqi_data()
@@ -202,6 +211,9 @@ async def handle_workout_analysis(user_config, prompts):
         # Để tránh Rate Limit khi gọi liên tiếp
         time.sleep(5) 
         
+        if tele_id:
+            await send_progress_update(TELE_TOKEN, "✅ Phân tích xong. 🎙️ Đang tạo bản thu âm...", tele_id, name)
+
         voice_template = prompts.get("voice_script")
         # Dùng mode="daily" tạm cho context thể thao
         voice_script = get_speech_script(ai_report, user_config, prompt_template=voice_template, mode="daily")
@@ -254,6 +266,9 @@ async def handle_battery_analysis(user_config, prompts):
         # 1. Kéo data đã tổng hợp (gồm Timeseries)
         r_data, r_score, l_data = get_processed_data(client, today, name)
 
+        if tele_id:
+            await send_progress_update(TELE_TOKEN, "✅ Đã đồng bộ. 🧠 Đang phân tích dữ liệu bằng AI...", tele_id, name)
+
         # 2. Gọi AI
         aqi_data = WeatherService.get_aqi_data()
 
@@ -272,6 +287,9 @@ async def handle_battery_analysis(user_config, prompts):
 
         # 3. Tạo Voice Script & Audio
         time.sleep(5)
+
+        if tele_id:
+            await send_progress_update(TELE_TOKEN, "✅ Phân tích xong. 🎙️ Đang tạo bản thu âm...", tele_id, name)
 
         voice_template = prompts.get("voice_script")
         voice_script = get_speech_script(ai_report, user_config, prompt_template=voice_template, mode="battery")
@@ -360,3 +378,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+
+
+

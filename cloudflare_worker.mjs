@@ -43,7 +43,7 @@ export default {
             let targetRepo = "";
 
             // === GARMIN BOT Commands ===
-            if (text === "/daily" || text === "daily" || text === "/report") {
+            if (text === "/daily" || text === "/report" || text === "daily") {
                 mode = "daily";
                 targetRepo = "garmin";
                 await sendMessage(env, chatId, "🚀 Đang lấy báo cáo ngày...");
