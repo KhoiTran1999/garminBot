@@ -297,7 +297,109 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
         verbose_label=user_label
     )
 
-def get_workout_analysis_advice(activity_data_list, user_config, prompt_template=None, aqi_data=None):
+def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None, aqi_data=None):
+    """
+    Gọi AI để phân tích năng lượng (Body Battery & Stress) trong ngày.
+    """
+    user_label = user_config.get('name', 'VĐV')
+    goal = user_config.get('goal', 'Duy trì sức khỏe')
+
+    print(f"[{user_label}] 🧠 Đang gọi AI Coach (Mode: battery)...")
+
+    vn_timezone = pytz.timezone('Asia/Ho_Chi_Minh')
+    current_now = datetime.now(vn_timezone).strftime("%H:%M:%S, %d/%m/%Y")
+
+    timeseries_text = r_data.get('timeseries_text', "Không có dữ liệu")
+    body_battery = r_data.get('body_battery', 0)
+    stress = r_data.get('stress', 0)
+
+    aqi_text = "Không có dữ liệu"
+    if aqi_data:
+        aqi_text = f"AQI: {aqi_data.get('aqi', 'N/A')} | PM2.5: {aqi_data.get('pm25', 'N/A')} (Location: {aqi_data.get('city', 'Unknown')})"
+
+    formatted_prompt = None
+    model_to_use = "gemini-3-flash-preview"
+
+    if prompt_template and isinstance(prompt_template, dict):
+        try:
+            sys_p = prompt_template.get("system_prompt", "")
+            user_tmplt = prompt_template.get("user_template", "")
+            model_to_use = prompt_template.get("model", "gemini-3-flash-preview")
+
+            formatted_user_part = user_tmplt.format(
+                user_label=user_label,
+                goal=goal,
+                current_now=current_now,
+                body_battery=body_battery,
+                stress=stress,
+                timeseries_text=timeseries_text,
+                aqi_info=aqi_text
+            )
+            formatted_prompt = f"{sys_p}\n\n{formatted_user_part}"
+        except Exception as e:
+            print(f"[{user_label}] ⚠️ Error formatting Notion prompt (battery): {e}")
+            formatted_prompt = None
+    elif prompt_template and isinstance(prompt_template, str):
+         try:
+            formatted_prompt = prompt_template.format(
+                user_label=user_label,
+                goal=goal,
+                current_now=current_now,
+                body_battery=body_battery,
+                stress=stress,
+                timeseries_text=timeseries_text,
+                aqi_info=aqi_text
+            )
+         except Exception as e:
+            print(f"[{user_label}] ⚠️ Error formatting Notion string prompt (battery): {e}")
+            formatted_prompt = None
+
+    if formatted_prompt:
+        prompt = formatted_prompt
+    else:
+        prompt = f"""
+        Bạn là Huấn luyện viên và Chuyên gia sức khỏe (AI Energy Coach).
+        Hãy phân tích xu hướng Pin cơ thể (Body Battery) và Căng thẳng (Stress) trong ngày của: {user_label}.
+        Thời gian báo cáo hiện tại: {current_now}
+
+        MỤC TIÊU VĐV: {goal}
+
+        DỮ LIỆU HIỆN TẠI:
+        - **Pin cơ thể (Body Battery):** {body_battery}/100
+        - **Căng thẳng (Stress) trung bình:** {stress} (Thấp <25, Cao >50)
+        - **Chất lượng không khí (AQI):** {aqi_text}
+
+        BIẾN ĐỘNG TRONG NGÀY (2-hour blocks):
+{timeseries_text}
+
+        YÊU CẦU OUTPUT (Markdown Telegram):
+        Trả về báo cáo phân tích biểu đồ năng lượng, tập trung tìm ra nguyên nhân hao hụt pin:
+
+        **🔋 TRẠNG THÁI NĂNG LƯỢNG**
+        [Đánh giá tổng quan mức pin hiện tại có ổn không?]
+
+        **📉 PHÂN TÍCH TIÊU HAO & PHỤC HỒI**
+        [Dựa vào Biến động trong ngày, chỉ ra khung giờ nào tụt pin nhiều nhất. Nếu có tập thể dục (Tập: ...), hãy nói rõ hao pin do tập là tốt. Nếu tụt pin do Stress cao mà không tập, hãy nhắc nhở.]
+
+        **💡 LỜI KHUYÊN NĂNG LƯỢNG**
+        [Lời khuyên để phục hồi pin nhanh nhất trong phần còn lại của ngày.]
+
+        LƯU Ý: Chỉ dùng dấu * để bold text cho text và *** để bold text cho title, dùng dấu • cho danh sách.
+        """
+
+    def worker(api_key):
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model=model_to_use,
+            contents=prompt
+        )
+        return response.text
+
+    return key_manager.execute_with_retry(
+        worker_func=worker,
+        default_return="AI Coach đang bận hoặc hết Quota. Vui lòng thử lại sau.",
+        verbose_label=user_label
+    )
     """
     Phân tích chi tiết (Time-series) các bài tập trong 24h.
     """
@@ -423,7 +525,7 @@ def get_speech_script(original_text, user_config, prompt_template=None, mode="da
     user_label = user_config.get('name', 'Bạn')
     print(f"[{user_label}] 🗣️ Đang viết kịch bản Voice...")
     
-    context_str = "báo cáo thể thao" if mode == "daily" else "phân tích giấc ngủ sáng nay"
+    context_str = "báo cáo thể thao" if mode == "daily" else "phân tích năng lượng cơ thể" if mode == "battery" else "phân tích giấc ngủ sáng nay"
     
     formatted_prompt = None
     model_to_use = "gemini-3-flash-preview"

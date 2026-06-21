@@ -224,9 +224,79 @@ async def handle_workout_analysis(user_config, prompts):
     except Exception as e:
         print(f"[{name}] ❌ Lỗi xử lý Workout: {e}")
 
+async def handle_battery_analysis(user_config, prompts):
+    """
+    Xử lý phân tích năng lượng chuyên biệt (Body Battery & Stress).
+    """
+    name = user_config.get('name', 'Unknown')
+    email = user_config.get('email')
+    password = user_config.get('password')
+    tele_id = user_config.get('telegram_chat_id')
+
+    if not email or not password:
+        print(f"[{name}] ❌ Thiếu Email/Pass, bỏ qua.")
+        return
+
+    try:
+        client = login_garmin(email, password, name)
+
+        # --- FRESHNESS CHECK ---
+        is_fresh, fresh_msg = check_garmin_sync_status(client, max_age_hours=1.0, user_label=name)
+        if not is_fresh:
+            print(f"[{name}] ⛔ {fresh_msg}")
+            if tele_id:
+                await send_telegram_report(TELE_TOKEN, f"⛔ {fresh_msg}", tele_id, name, None)
+            return
+        # -----------------------
+
+        today = date.today()
+
+        # 1. Kéo data đã tổng hợp (gồm Timeseries)
+        r_data, r_score, l_data = get_processed_data(client, today, name)
+
+        # 2. Gọi AI
+        aqi_data = WeatherService.get_aqi_data()
+
+        battery_template = prompts.get("battery_analysis")
+        if battery_template:
+            print(f"[{name}] ℹ️ Using Prompt: 'battery_analysis' (Model: {battery_template.get('model', 'default')})")
+        else:
+             print(f"[{name}] ⚠️ Prompt 'battery_analysis' not found in Notion. Using Fallback.")
+
+        # Gọi hàm chuyên biệt phân tích Pin
+        from app.services.ai_service import get_battery_analysis_advice
+        ai_report = get_battery_analysis_advice(today, r_data, user_config, prompt_template=battery_template, aqi_data=aqi_data)
+
+        if not ai_report:
+            print(f"[{name}] ⚠️ Không tạo được báo cáo AI.")
+            return
+
+        # 3. Tạo Voice Script & Audio
+        time.sleep(5)
+
+        voice_template = prompts.get("voice_script")
+        voice_script = get_speech_script(ai_report, user_config, prompt_template=voice_template, mode="battery")
+
+        audio_file = f"voice_battery_{name}_{today}.wav"
+        has_audio = await generate_audio_from_text(voice_script, audio_file)
+
+        # 4. Gửi Telegram
+        if tele_id:
+            await send_telegram_report(TELE_TOKEN, ai_report, tele_id, name, audio_file if has_audio else None)
+        else:
+            print(f"[{name}] ⚠️ Không có Chat ID.")
+
+        if has_audio and os.path.exists(audio_file):
+            try:
+                os.remove(audio_file)
+            except: pass
+
+    except Exception as e:
+        print(f"[{name}] ❌ Lỗi xử lý Battery Analysis: {e}")
+
 async def main():
     parser = argparse.ArgumentParser(description="Garmin AI Coach Pro")
-    parser.add_argument("--mode", default="daily", help="Mode: daily | sleep_analysis | workout")
+    parser.add_argument("--mode", default="daily", help="Mode: daily | sleep_analysis | workout | battery")
     
     # 1. THÊM DÒNG NÀY: Nhận tham số tele_id từ GitHub Action
     parser.add_argument("--tele_id", default=None, help="Filter specific user by Telegram ID")
@@ -266,6 +336,8 @@ async def main():
         for user in users:
             if mode == "workout":
                 tasks.append(handle_workout_analysis(user, prompts))
+            elif mode == "battery":
+                tasks.append(handle_battery_analysis(user, prompts))
             elif mode in ["daily", "daily_report", "sleep_analysis"]:
                 # Clean up mode string explicitly if needed
                 run_mode = "sleep_analysis" if mode == "sleep_analysis" else "daily"
