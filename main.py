@@ -13,7 +13,7 @@ logging.getLogger("garminconnect").setLevel(logging.CRITICAL)
 # Import Services
 from app.services.notion_service import get_users_from_notion
 from app.services.garmin_service import get_processed_data, fetch_daily_activities_detailed, check_garmin_sync_status
-from app.services.ai_service import get_ai_advice, get_workout_analysis_advice, get_speech_script, generate_audio_from_text
+from app.services.ai_service import get_ai_advice, get_workout_analysis_advice, get_battery_analysis_advice, get_speech_script, generate_audio_from_text
 from app.services.prompt_service import get_prompts_from_notion
 from app.services.telegram_service import send_telegram_report, send_error_alert
 from app.services.weather_service import WeatherService
@@ -264,7 +264,6 @@ async def handle_battery_analysis(user_config, prompts):
              print(f"[{name}] ⚠️ Prompt 'battery_analysis' not found in Notion. Using Fallback.")
 
         # Gọi hàm chuyên biệt phân tích Pin
-        from app.services.ai_service import get_battery_analysis_advice
         ai_report = get_battery_analysis_advice(today, r_data, user_config, prompt_template=battery_template, aqi_data=aqi_data)
 
         if not ai_report:
