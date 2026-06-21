@@ -400,6 +400,7 @@ def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None
         default_return="AI Coach đang bận hoặc hết Quota. Vui lòng thử lại sau.",
         verbose_label=user_label
     )
+def get_workout_analysis_advice(activity_data_list, user_config, prompt_template=None, aqi_data=None):
     """
     Phân tích chi tiết (Time-series) các bài tập trong 24h.
     """
