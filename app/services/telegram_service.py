@@ -11,10 +11,10 @@ async def send_telegram_report(bot_token, message, chat_id, user_label="User", a
 
     # Tạo menu nút bấm
     keyboard = [
-        [InlineKeyboardButton("Báo cáo Ngày", callback_data="daily")],
-        [InlineKeyboardButton("Phân tích Ngủ", callback_data="sleep_analysis"),
-         InlineKeyboardButton("Phân tích Tập luyện", callback_data="workout")],
-        [InlineKeyboardButton("Bắt mạch Năng lượng (Pin & Stress)", callback_data="battery")]
+        [InlineKeyboardButton("📊 Báo cáo Ngày", callback_data="daily")],
+        [InlineKeyboardButton("💤 Phân tích Ngủ", callback_data="sleep_analysis"),
+         InlineKeyboardButton("🏃 Bài tập", callback_data="workout")],
+        [InlineKeyboardButton("🔋 Bắt mạch Năng lượng", callback_data="battery")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
