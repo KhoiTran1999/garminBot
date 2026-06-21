@@ -34,6 +34,17 @@ def calculate_rhr_score(rhr):
     elif diff <= 15: return 35   # RHR 71-75: cảnh báo
     else: return 15              # RHR > 75: nghiêm trọng
 
+def calculate_hrv_score(hrv_status):
+    """Ánh xạ trạng thái HRV sang điểm số (0-100)"""
+    if not hrv_status: return None
+    status_map = {
+        "BALANCED": 100,
+        "UNBALANCED": 50,
+        "LOW": 30,
+        "POOR": 10
+    }
+    return status_map.get(str(hrv_status).upper(), 70) # Default 70 cho trạng thái không xác định (vd: NO_STATUS)
+
 def calculate_bb_score(bb_value):
     """Quy đổi Body Battery (0-100) sang điểm readiness (0-100).
     BB 50 trên Garmin là mức trung bình khá, cần được phản ánh đúng.
@@ -98,25 +109,34 @@ def calculate_readiness_score(data):
     resp_val = data.get('avg_sleep_resp')
     resp_score = calculate_resp_score(resp_val)
 
+    # --- HRV ---
+    hrv_status = data.get('hrv_status')
+    hrv_score = calculate_hrv_score(hrv_status)
+
     # --- Nap Bonus ---
     nap_sec = data.get('nap_seconds', 0)
     nap_bonus = calculate_nap_bonus(nap_sec)
 
     # 2. Define Weights (tổng = 1.0)
-    w_sleep = 0.30
-    w_bb = 0.25
+    w_sleep = 0.25
+    w_bb = 0.20
     w_stress = 0.20
+    w_hrv = 0.10
     w_rhr = 0.10
     w_spo2 = 0.08
     w_resp = 0.07
 
     # 3. Dynamic Weight Redistribution (khi thiếu dữ liệu)
+    has_hrv = hrv_score is not None
     has_rhr = rhr_score is not None
     has_spo2 = spo2_score is not None
     has_resp = resp_score is not None
 
     # Thu thập trọng số bị mất
     lost_weight = 0
+    if not has_hrv:
+        lost_weight += w_hrv
+        w_hrv = 0
     if not has_rhr:
         lost_weight += w_rhr
         w_rhr = 0
@@ -135,6 +155,7 @@ def calculate_readiness_score(data):
         w_stress += bonus
 
     # 4. Calculate Final Score
+    safe_hrv = hrv_score if has_hrv else 0
     safe_rhr = rhr_score if has_rhr else 0
     safe_spo2 = spo2_score if has_spo2 else 0
     safe_resp = resp_score if has_resp else 0
@@ -142,6 +163,7 @@ def calculate_readiness_score(data):
     weighted_score = (w_sleep * sleep_score) + \
                      (w_bb * bb_score) + \
                      (w_stress * stress_score) + \
+                     (w_hrv * safe_hrv) + \
                      (w_rhr * safe_rhr) + \
                      (w_spo2 * safe_spo2) + \
                      (w_resp * safe_resp)

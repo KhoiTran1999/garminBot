@@ -104,6 +104,14 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
         resp_text = (f"Waking Avg {int(r_data['avg_waking_resp'])} brpm | Sleep Avg {int(r_data['avg_sleep_resp'])} brpm | "
                         f"Min {int(r_data['min_resp'])} - Max {int(r_data['max_resp'])}")
 
+    hrv_text = "Không có dữ liệu"
+    if r_data.get('hrv_status'):
+        hrv_text = f"Status: {r_data.get('hrv_status', 'N/A')} | Last Night: {r_data.get('last_night_hrv', 'N/A')} ms"
+
+    training_status_text = "Không có dữ liệu"
+    if r_data.get('training_status'):
+        training_status_text = r_data.get('training_status')
+
     # AQI Data
     aqi_text = "Không có dữ liệu"
     if aqi_data:
@@ -140,6 +148,8 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
                 nap_text=nap_text,
                 spo2_text=spo2_text,
                 resp_text=resp_text,
+                hrv_text=hrv_text,
+                training_status_text=training_status_text,
                 aqi_info=aqi_text
             )
             
@@ -168,6 +178,8 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
                 nap_text=nap_text,
                 spo2_text=spo2_text,
                 resp_text=resp_text,
+                hrv_text=hrv_text,
+                training_status_text=training_status_text,
                 aqi_info=aqi_text
             )
          except Exception as e:
@@ -190,10 +202,12 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
         DỮ LIỆU ĐÊM QUA & SÁNG NAY:
         - **Điểm Sẵn sàng (Readiness):** {r_score}/100
         - **Giấc ngủ:** {r_data['sleep_text']} (Ngủ nông/sâu/REM)
-        - **Phục hồi:** Body Battery {r_data['body_battery']}/100 | Stress {r_data['stress']} 
+        - **Phục hồi:** Body Battery {r_data['body_battery']}/100 | Stress {r_data['stress']}
         - **Nhịp tim nghỉ (RHR):** {r_data['rhr']} bpm
+        - **HRV (Biến thiên nhịp tim):** {hrv_text}
         - **SpO2 (Oxy máu):** {spo2_text}
         - **Hô hấp (Respiration):** {resp_text}
+        - **Trạng thái tập luyện (Training Status):** {training_status_text}
         - **Chất lượng không khí (AQI):** {aqi_text}
 
         YÊU CẦU OUTPUT (Markdown Telegram):
@@ -229,6 +243,8 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
         - **Giấc ngủ:** {r_data['sleep_text']}
             {nap_text}
         - **Nhịp tim nghỉ (RHR):** {r_data['rhr']} bpm
+        - **HRV (Biến thiên nhịp tim):** {hrv_text}
+        - **Trạng thái tập luyện (Training Status):** {training_status_text}
         - **SpO2:** {spo2_text}
         - **Hô hấp:** {resp_text}
         - **AQI (Không khí):** {aqi_text}

@@ -95,8 +95,9 @@ def get_processed_data(client, today, user_label="User"):
     print(f"[{user_label}] 🔄 Đang thu thập dữ liệu Garmin...")
     
     readiness_data = {
-        "rhr": 0, "stress": 0, "body_battery": 0, 
-        "sleep_hours": 0, "nap_seconds": 0, "sleep_text": "Chưa có dữ liệu"
+        "rhr": 0, "stress": 0, "body_battery": 0,
+        "sleep_hours": 0, "nap_seconds": 0, "sleep_text": "Chưa có dữ liệu",
+        "hrv_status": None, "last_night_hrv": None, "training_status": None
     }
     date_iso = today.isoformat()
 
@@ -144,6 +145,17 @@ def get_processed_data(client, today, user_label="User"):
         
     except Exception as e:
         print(f"[{user_label}] ⚠️ Lỗi lấy SpO2/Respiration: {e}")
+
+    # --- B3. HRV & Training Status ---
+    try:
+        hrv_data = get_hrv_data(client, date_iso) or {}
+        readiness_data['hrv_status'] = hrv_data.get('hrvStatus')
+        readiness_data['last_night_hrv'] = hrv_data.get('lastNightAvg')
+
+        ts_data = get_training_status(client, date_iso) or {}
+        readiness_data['training_status'] = ts_data.get('trainingStatus')
+    except Exception as e:
+        print(f"[{user_label}] ⚠️ Lỗi lấy HRV/Training Status: {e}")
 
     readiness_score = calculate_readiness_score(readiness_data)
 
@@ -270,4 +282,14 @@ def get_hrv_data(client, date_str):
         return client.get_hrv_data(date_str)
     except Exception as e:
         print(f"⚠️ Lỗi lấy HRV: {e}")
+        return None
+
+def get_training_status(client, date_str):
+    """
+    Lay du lieu Training Status trong ngay.
+    """
+    try:
+        return client.get_training_status(date_str)
+    except Exception as e:
+        print(f"⚠️ Lỗi lấy Training Status: {e}")
         return None
