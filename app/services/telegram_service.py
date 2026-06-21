@@ -1,5 +1,5 @@
 import os
-from telegram import Bot
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 
 async def send_telegram_report(bot_token, message, chat_id, user_label="User", audio_path=None):
     print(f"[{user_label}] 📲 Đang gửi Telegram...")
@@ -8,13 +8,23 @@ async def send_telegram_report(bot_token, message, chat_id, user_label="User", a
         return
 
     bot = Bot(token=bot_token)
+
+    # Tạo menu nút bấm
+    keyboard = [
+        [InlineKeyboardButton("Báo cáo Ngày", callback_data="daily")],
+        [InlineKeyboardButton("Phân tích Ngủ", callback_data="sleep_analysis"),
+         InlineKeyboardButton("Phân tích Tập luyện", callback_data="workout")],
+        [InlineKeyboardButton("Bắt mạch Năng lượng (Pin & Stress)", callback_data="battery")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     try:
-        await bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
+        await bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown', reply_markup=reply_markup)
         print(f"[{user_label}] ✅ Gửi thành công!")
     except Exception as e:
         print(f"[{user_label}] ⚠️ Lỗi Markdown, đang gửi Plain Text...")
         try:
-            await bot.send_message(chat_id=chat_id, text=message, parse_mode=None)
+            await bot.send_message(chat_id=chat_id, text=message, parse_mode=None, reply_markup=reply_markup)
         except Exception as e2:
             print(f"❌ Lỗi gửi tin nhắn: {e2}")
 
