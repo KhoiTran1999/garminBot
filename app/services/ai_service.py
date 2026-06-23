@@ -9,72 +9,6 @@ from google import genai
 from google.genai import types
 from app.config import Config
 
-class Router9KeyManager:
-    """
-    Quản lý danh sách API Key và xoay vòng (Round Robin) + Failover.
-    """
-    def __init__(self):
-        self.keys = []
-        self._load_keys()
-        self.current_index = 0
-
-    def _load_keys(self):
-        self.keys = Config.ROUTER9_API_KEYS
-        print(f"🔑 Loaded {len(self.keys)} 9Router Keys from Config.")
-
-    def get_current_key(self):
-        if not self.keys:
-            return None
-        return self.keys[self.current_index]
-
-    def rotate_key(self):
-        """Chuyển sang key tiếp theo trong danh sách."""
-        if not self.keys:
-            return None
-        self.current_index = (self.current_index + 1) % len(self.keys)
-        print(f"🔄 Switching to API Key Index: {self.current_index}")
-        return self.get_current_key()
-    
-    def get_key_count(self):
-        return len(self.keys)
-
-    def execute_with_retry(self, worker_func, default_return=None, verbose_label="Service"):
-        """
-        Thực thi worker_func với logic Retry & Rotate Key.
-        worker_func(api_key) -> result
-        """
-        max_attempts = self.get_key_count() * 2
-        if max_attempts == 0: 
-            print(f"[{verbose_label}] ⚠️ Không có API Key nào để thực thi.")
-            return default_return
-
-        for attempt in range(max_attempts):
-            current_api_key = self.get_current_key()
-            try:
-                # Thực thi logic chính
-                result = worker_func(current_api_key)
-                
-                # Thành công -> Rotate để load balancing
-                self.rotate_key()
-                return result
-
-            except Exception as e:
-                error_msg = str(e)
-                print(f"[{verbose_label}] ⚠️ Lỗi AI (Key ...{current_api_key[-5:] if current_api_key else 'None'}): {error_msg}")
-                
-                # Logic xử lý lỗi + Rotate
-                if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "quota" in error_msg.lower():
-                    print(f"   --> Quota Exceeded. Rotating key...")
-                    self.rotate_key()
-                    time.sleep(1)
-                else:
-                    self.rotate_key()
-                    time.sleep(2)
-
-        print(f"[{verbose_label}] ❌ Đã thử tất cả các keys nhưng vẫn thất bại.")
-        return default_return
-
-
 class GeminiKeyManager:
     """
     Quản lý danh sách API Key Gemini cho TTS
@@ -149,7 +83,6 @@ def call_ai_api(api_key, model_name, prompt):
     return content
 
 # Khởi tạo Global Instance
-key_manager = Router9KeyManager()
 gemini_key_manager = GeminiKeyManager()
 
 
@@ -358,15 +291,16 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
         LƯU Ý: Chỉ dùng dấu * để bold text cho text và *** để bold text cho title, dùng dấu • cho danh sách.
         """
 
-    # --- CƠ CHẾ XOAY VÒNG KEY & RETRY (Refactored) ---
-    def worker(api_key):
-        return call_ai_api(api_key, model_to_use, prompt)
-
-    return key_manager.execute_with_retry(
-        worker_func=worker,
-        default_return="AI Coach đang bận hoặc hết Quota tất cả các key. Vui lòng thử lại sau.",
-        verbose_label=user_label
-    )
+    # --- GỌI API TRỰC TIẾP (Không Retry Key) ---
+    try:
+        if Config.ROUTER9_API_KEY:
+            return call_ai_api(Config.ROUTER9_API_KEY, model_to_use, prompt)
+        else:
+             print(f"[{user_label}] ⚠️ Không có ROUTER9_API_KEY.")
+             return "AI Coach chưa được cấu hình ROUTER9_API_KEY."
+    except Exception as e:
+        print(f"[{user_label}] ⚠️ Lỗi AI: {str(e)}")
+        return "AI Coach đang bận hoặc gặp lỗi. Vui lòng thử lại sau."
 
 def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None, aqi_data=None):
     """
@@ -458,14 +392,15 @@ def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None
         LƯU Ý: Chỉ dùng dấu * để bold text cho text và *** để bold text cho title, dùng dấu • cho danh sách.
         """
 
-    def worker(api_key):
-        return call_ai_api(api_key, model_to_use, prompt)
-
-    return key_manager.execute_with_retry(
-        worker_func=worker,
-        default_return="AI Coach đang bận hoặc hết Quota. Vui lòng thử lại sau.",
-        verbose_label=user_label
-    )
+    try:
+        if Config.ROUTER9_API_KEY:
+            return call_ai_api(Config.ROUTER9_API_KEY, model_to_use, prompt)
+        else:
+             print(f"[{user_label}] ⚠️ Không có ROUTER9_API_KEY.")
+             return "AI Coach chưa được cấu hình ROUTER9_API_KEY."
+    except Exception as e:
+        print(f"[{user_label}] ⚠️ Lỗi AI: {str(e)}")
+        return "AI Coach đang bận hoặc gặp lỗi. Vui lòng thử lại sau."
 def get_workout_analysis_advice(activity_data_list, user_config, prompt_template=None, aqi_data=None):
     """
     Phân tích chi tiết (Time-series) các bài tập trong 24h.
@@ -570,15 +505,15 @@ def get_workout_analysis_advice(activity_data_list, user_config, prompt_template
         LƯU Ý: Chỉ dùng dấu * để bold text cho text và *** để bold text cho title, dùng dấu • cho danh sách.
         """
 
-    # --- ROTATION LOGIC (Refactored) ---
-    def worker(api_key):
-        return call_ai_api(api_key, model_to_use, prompt)
-
-    return key_manager.execute_with_retry(
-        worker_func=worker,
-        default_return=None,
-        verbose_label=user_label
-    )
+    try:
+        if Config.ROUTER9_API_KEY:
+            return call_ai_api(Config.ROUTER9_API_KEY, model_to_use, prompt)
+        else:
+             print(f"[{user_label}] ⚠️ Không có ROUTER9_API_KEY.")
+             return None
+    except Exception as e:
+        print(f"[{user_label}] ⚠️ Lỗi AI: {str(e)}")
+        return None
 
 def get_speech_script(original_text, user_config, prompt_template=None, mode="daily"):
     """
@@ -632,15 +567,15 @@ def get_speech_script(original_text, user_config, prompt_template=None, mode="da
         Nhiệm vụ: Viết lại thành **KỊCH BẢN ĐỌC (Voice Script)** ngắn gọn, tự nhiên, bỏ emoji, bỏ markdown. Giọng điệu: Hào hứng, năng động, ấm áp, như một người bạn đồng hành.
         """
 
-    # --- ROTATION LOGIC (Refactored) ---
-    def worker(api_key):
-        return call_ai_api(api_key, model_to_use, prompt).strip()
-
-    return key_manager.execute_with_retry(
-        worker_func=worker,
-        default_return="Xin chào, đây là báo cáo sức khỏe của bạn. Hãy kiểm tra tin nhắn văn bản để biết chi tiết.",
-        verbose_label=user_label
-    )
+    try:
+        if Config.ROUTER9_API_KEY:
+            return call_ai_api(Config.ROUTER9_API_KEY, model_to_use, prompt).strip()
+        else:
+             print(f"[{user_label}] ⚠️ Không có ROUTER9_API_KEY.")
+             return "Xin chào, đây là báo cáo sức khỏe của bạn. Hãy kiểm tra tin nhắn văn bản để biết chi tiết."
+    except Exception as e:
+        print(f"[{user_label}] ⚠️ Lỗi AI: {str(e)}")
+        return "Xin chào, đây là báo cáo sức khỏe của bạn. Hãy kiểm tra tin nhắn văn bản để biết chi tiết."
 
 def parse_audio_mime_type(mime_type: str) -> Dict[str, Optional[int]]:
     """Parses bits per sample and rate from an audio MIME type string."""

@@ -27,9 +27,6 @@ jobs:
           GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
           GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
           ROUTER9_API_KEY: ${{ secrets.ROUTER9_API_KEY }}
-          ROUTER9_API_KEY_1: ${{ secrets.ROUTER9_API_KEY_1 }}
-          ROUTER9_API_KEY_2: ${{ secrets.ROUTER9_API_KEY_2 }}
-          ROUTER9_API_KEY_3: ${{ secrets.ROUTER9_API_KEY_3 }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
           NOTION_PROMPT_DATABASE_ID: ${{ secrets.NOTION_PROMPT_DATABASE_ID }}
