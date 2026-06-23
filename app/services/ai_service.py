@@ -9,7 +9,7 @@ from google import genai
 from google.genai import types
 from app.config import Config
 
-class GeminiKeyManager:
+class Router9KeyManager:
     """
     Quản lý danh sách API Key và xoay vòng (Round Robin) + Failover.
     """
@@ -19,8 +19,8 @@ class GeminiKeyManager:
         self.current_index = 0
 
     def _load_keys(self):
-        self.keys = Config.GEMINI_API_KEYS
-        print(f"🔑 Loaded {len(self.keys)} Gemini Keys from Config.")
+        self.keys = Config.ROUTER9_API_KEYS
+        print(f"🔑 Loaded {len(self.keys)} 9Router Keys from Config.")
 
     def get_current_key(self):
         if not self.keys:
@@ -74,8 +74,32 @@ class GeminiKeyManager:
         print(f"[{verbose_label}] ❌ Đã thử tất cả các keys nhưng vẫn thất bại.")
         return default_return
 
+
+import requests
+
+def call_ai_api(api_key, model_name, prompt):
+    url = "https://khoitran1999-claude-server.hf.space/v1/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+    data = {
+        "model": "gemini-3.1-pro",
+        "stream": False,
+        "messages": [{"role": "user", "content": prompt}]
+    }
+    response = requests.post(url, headers=headers, json=data)
+    response.raise_for_status()
+    
+    result = response.json()
+    if 'choices' in result and len(result['choices']) > 0:
+        return result['choices'][0]['message']['content']
+    else:
+        raise Exception(f"Unexpected response format: {result}")
+
 # Khởi tạo Global Instance
-key_manager = GeminiKeyManager()
+key_manager = Router9KeyManager()
+
 
 def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=None, mode="daily", aqi_data=None):
     """
@@ -284,12 +308,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
 
     # --- CƠ CHẾ XOAY VÒNG KEY & RETRY (Refactored) ---
     def worker(api_key):
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model=model_to_use, 
-            contents=prompt
-        )
-        return response.text
+        return call_ai_api(api_key, model_to_use, prompt)
 
     return key_manager.execute_with_retry(
         worker_func=worker,
@@ -388,12 +407,7 @@ def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None
         """
 
     def worker(api_key):
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model=model_to_use,
-            contents=prompt
-        )
-        return response.text
+        return call_ai_api(api_key, model_to_use, prompt)
 
     return key_manager.execute_with_retry(
         worker_func=worker,
@@ -506,12 +520,7 @@ def get_workout_analysis_advice(activity_data_list, user_config, prompt_template
 
     # --- ROTATION LOGIC (Refactored) ---
     def worker(api_key):
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model=model_to_use,
-            contents=prompt
-        )
-        return response.text
+        return call_ai_api(api_key, model_to_use, prompt)
 
     return key_manager.execute_with_retry(
         worker_func=worker,
@@ -573,12 +582,7 @@ def get_speech_script(original_text, user_config, prompt_template=None, mode="da
 
     # --- ROTATION LOGIC (Refactored) ---
     def worker(api_key):
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model=model_to_use,
-            contents=prompt
-        )
-        return response.text.strip()
+        return call_ai_api(api_key, model_to_use, prompt).strip()
 
     return key_manager.execute_with_retry(
         worker_func=worker,
