@@ -14,6 +14,7 @@ class Config:
 
     # Load 9Router Key (không fallback về GEMINI_API_KEY)
     ROUTER9_API_KEY = os.getenv("ROUTER9_API_KEY")
+    ROUTER9_COMBOS_MODEL = os.getenv("ROUTER9_COMBOS_MODEL")
 
     if not ROUTER9_API_KEY:
         print("⚠️ CẢNH BÁO: Không tìm thấy ROUTER9_API_KEY nào trong .env! Báo cáo AI sẽ không hoạt động.")
