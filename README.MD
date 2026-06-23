@@ -22,7 +22,8 @@ Dự án này tự động hóa quy trình thu thập dữ liệu sức khỏe t
     * **Acute Training Load (7 ngày):** Tính toán tải tập luyện dựa trên nhịp tim (TRIMP Banister).
     * **Chất lượng không khí (AQI):** Tích hợp thông tin thời tiết vào lời khuyên chạy bộ.
 
-* **🤖 AI Coach (Gemini 2.0 Flash):** 
+* **🤖 AI Coach (9Router/Gemini):** 
+    * Sử dụng endpoint 9Router tuỳ chỉnh (với model `gemini-3.1-pro`).
     * Đóng vai HLV chuyên nghiệp, đưa ra bài tập cụ thể (Pace, Thời gian) dựa trên thể trạng thực tế.
     * Tự động tạo **Voice Script** (Text-to-Speech) để gửi lời nhắn động viên bằng giọng nói qua Telegram.
     * Hiển thị trạng thái phân tích theo thời gian thực ("Đang lấy báo cáo...", "Đang tạo bản thu âm...").
@@ -34,7 +35,7 @@ Dự án này tự động hóa quy trình thu thập dữ liệu sức khỏe t
 Để chạy dự án, bạn cần:
 
 1.  **Tài khoản Garmin Connect:** Email và Mật khẩu.
-2.  **Google Gemini API Key:** Lấy miễn phí tại [Google AI Studio](https://aistudio.google.com/).
+2.  **9Router API Key:** Lấy key 9Router (hoặc sử dụng server riêng).
 3.  **Telegram Bot:** Token và Chat ID (lấy từ @BotFather và @userinfobot).
 4.  **Notion Integration:**
     * Tạo Database trên Notion.
@@ -75,7 +76,7 @@ Bạn cần tạo một Database trên Notion với các cột chính xác như 
 3.  **Cấu hình biến môi trường (`.env`):**
     ```env
     TELEGRAM_TOKEN="your_tele_token"
-    GEMINI_API_KEY="your_gemini_key"
+    ROUTER9_API_KEY="your_router9_key"
     NOTION_TOKEN="secret_your_notion_token"
     NOTION_DATABASE_ID="your_database_id"
     NOTION_PROMPT_DATABASE_ID="your_prompt_database_id"
