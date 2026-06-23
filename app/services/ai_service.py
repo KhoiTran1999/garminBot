@@ -75,6 +75,59 @@ class Router9KeyManager:
         return default_return
 
 
+class GeminiKeyManager:
+    """
+    Quản lý danh sách API Key Gemini cho TTS
+    """
+    def __init__(self):
+        self.keys = []
+        self._load_keys()
+        self.current_index = 0
+
+    def _load_keys(self):
+        self.keys = Config.GEMINI_API_KEYS
+        print(f"🔑 Loaded {len(self.keys)} Gemini Keys from Config.")
+
+    def get_current_key(self):
+        if not self.keys:
+            return None
+        return self.keys[self.current_index]
+
+    def rotate_key(self):
+        if not self.keys:
+            return None
+        self.current_index = (self.current_index + 1) % len(self.keys)
+        return self.get_current_key()
+
+    def get_key_count(self):
+        return len(self.keys)
+
+    def execute_with_retry(self, worker_func, default_return=None, verbose_label="Service"):
+        max_attempts = self.get_key_count() * 2
+        if max_attempts == 0:
+            print(f"[{verbose_label}] ⚠️ Không có API Key nào để thực thi.")
+            return default_return
+
+        for attempt in range(max_attempts):
+            current_api_key = self.get_current_key()
+            try:
+                result = worker_func(current_api_key)
+                self.rotate_key()
+                return result
+
+            except Exception as e:
+                error_msg = str(e)
+                print(f"[{verbose_label}] ⚠️ Lỗi AI (Key ...{current_api_key[-5:] if current_api_key else 'None'}): {error_msg}")
+
+                if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "quota" in error_msg.lower():
+                    self.rotate_key()
+                    time.sleep(1)
+                else:
+                    self.rotate_key()
+                    time.sleep(2)
+
+        return default_return
+
 import requests
 
 def call_ai_api(api_key, model_name, prompt):
@@ -99,6 +152,7 @@ def call_ai_api(api_key, model_name, prompt):
 
 # Khởi tạo Global Instance
 key_manager = Router9KeyManager()
+gemini_key_manager = GeminiKeyManager()
 
 
 def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=None, mode="daily", aqi_data=None):
@@ -694,7 +748,7 @@ async def generate_audio_from_text(text, output_file, voice="Sadachbia"):
         else:
              raise Exception("Stream finished but no audio data collected.")
 
-    return key_manager.execute_with_retry(
+    return gemini_key_manager.execute_with_retry(
         worker_func=worker,
         default_return=False,
         verbose_label="Gemini TTS"
