@@ -129,26 +129,24 @@ class GeminiKeyManager:
         return default_return
 
 import requests
+from openai import OpenAI
 
 def call_ai_api(api_key, model_name, prompt):
-    url = "https://khoitran1999-claude-server.hf.space/v1/chat/completions"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
-    }
-    data = {
-        "model": "gemini-3.1-pro",
-        "stream": False,
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    response = requests.post(url, headers=headers, json=data)
-    response.raise_for_status()
-    
-    result = response.json()
-    if 'choices' in result and len(result['choices']) > 0:
-        return result['choices'][0]['message']['content']
-    else:
-        raise Exception(f"Unexpected response format: {result}")
+    client = OpenAI(
+        base_url="https://khoitran1999-claude-server.hf.space/v1",
+        api_key=api_key
+    )
+
+    response = client.chat.completions.create(
+        model="gemini-3.1-pro",
+        messages=[{"role": "user", "content": prompt}],
+        stream=False
+    )
+
+    content = response.choices[0].message.content
+    if not content:
+        raise Exception("Empty response from AI model")
+    return content
 
 # Khởi tạo Global Instance
 key_manager = Router9KeyManager()
