@@ -1543,6 +1543,78 @@ def call_ai_api_raw(api_key, model_name, messages, tools=None):
     response = client.chat.completions.create(**kwargs)
     return response.choices[0].message
 
+async def call_ai_api_raw_async(api_key, model_name, messages, tools=None):
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(
+        base_url="https://khoitran1999-claude-server.hf.space/v1",
+        api_key=api_key
+    )
+    kwargs = {
+        "model": model_name,
+        "messages": messages,
+        "stream": False
+    }
+    if tools:
+        kwargs["tools"] = tools
+
+    response = await client.chat.completions.create(**kwargs)
+    return response.choices[0].message
+
+async def process_data_with_worker(tool_name: str, tool_args: dict, raw_data_str: str, user_label: str = "User") -> str:
+    """
+    Sử dụng MODEL_WORKER để xử lý và tóm tắt dữ liệu Garmin Connect thô trước khi trả về cho MODEL_BRAIN.
+    """
+    import json
+    try:
+        data = json.loads(raw_data_str)
+        if isinstance(data, dict) and "error" in data:
+            return raw_data_str
+    except Exception:
+        pass
+
+    if not Config.ROUTER9_API_KEY:
+        return raw_data_str
+
+    prompt = f"""
+    Bạn là Trợ lý phân tích dữ liệu Garmin chuyên sâu (MODEL_WORKER).
+    Nhiệm vụ của bạn là đọc dữ liệu thô từ API Garmin Connect, lọc sạch, phân tích ngắn gọn và định dạng lại thành cấu trúc dễ đọc nhất để gửi cho MODEL_BRAIN.
+
+    Mục tiêu công cụ: {tool_name}
+    Các tham số yêu cầu: {json.dumps(tool_args, ensure_ascii=False)}
+
+    YÊU CẦU PHÂN TÍCH:
+    1. Trích xuất các số liệu quan trọng nhất (ví dụ: trị số trung bình, thời điểm cao nhất/thấp nhất, bất thường).
+    2. Lọc bỏ các thông tin rác, rỗng hoặc các trường kỹ thuật không cần thiết để tối ưu hóa tokens.
+    3. Định dạng kết quả dạng văn bản ngắn gọn, có gạch đầu dòng rõ ràng.
+    4. Giữ nguyên tính chính xác tuyệt đối của các con số. Không tự bịa thông tin.
+    5. Nếu dữ liệu rỗng hoặc không có gì, hãy nói rõ không ghi nhận được chỉ số nào.
+
+    DỮ LIỆU THÔ (JSON) TỪ GARMIN:
+    ---
+    {raw_data_str}
+    ---
+
+    Hãy trả về báo cáo phân tích cô đọng của bạn (dưới 250 từ):
+    """
+
+    try:
+        print(f"[{user_label}] 🤖 Sending raw data of {tool_name} to MODEL_WORKER for preprocessing...")
+        messages = [
+            {"role": "system", "content": "You are a professional Garmin health data analyst. Answer in Vietnamese."},
+            {"role": "user", "content": prompt}
+        ]
+        response_msg = await call_ai_api_raw_async(
+            api_key=Config.ROUTER9_API_KEY,
+            model_name=Config.MODEL_WORKER,
+            messages=messages
+        )
+        worker_summary = response_msg.content or raw_data_str
+        print(f"[{user_label}] 🧠 MODEL_WORKER finished processing {tool_name}.")
+        return worker_summary
+    except Exception as e:
+        print(f"[{user_label}] ⚠️ Error in MODEL_WORKER processing {tool_name}: {e}. Falling back to raw data.")
+        return raw_data_str
+
 async def get_customer_service_advice(tele_id: str, question: str, user_config: dict, prompt_template: dict = None, garmin_context: str = None, garmin_client = None) -> str:
     """
     Hỏi đáp hỗ trợ về tính năng và dữ liệu của Garmin Connect sử dụng Tool Calling / Agent.
@@ -1653,7 +1725,7 @@ YÊU CẦU:
             max_iterations = 5
             for iteration in range(max_iterations):
                 print(f"[{user_label}] Calling LLM (iteration {iteration+1})...")
-                response_msg = call_ai_api_raw(
+                response_msg = await call_ai_api_raw_async(
                     api_key=Config.ROUTER9_API_KEY,
                     model_name=model_to_use,
                     messages=messages,
@@ -1679,12 +1751,12 @@ YÊU CẦU:
                     }
                     messages.append(assistant_msg)
 
-                    # Execute each tool
-                    for tool_call in response_msg.tool_calls:
-                        tool_name = tool_call.function.name
+                    # Helper to execute a single tool pipeline async
+                    async def run_single_tool_pipeline(tc):
+                        tool_name = tc.function.name
                         import json
                         try:
-                            tool_args = json.loads(tool_call.function.arguments)
+                            tool_args = json.loads(tc.function.arguments)
                         except Exception as je:
                             print(f"Error parsing tool args: {je}")
                             tool_args = {}
@@ -1696,15 +1768,28 @@ YÊU CẦU:
                             tool_args["start_date"] = current_date_str
 
                         print(f"[{user_label}] 🛠️ AI requests tool: {tool_name} with args {tool_args}")
-                        tool_result = execute_garmin_tool(garmin_client, tool_name, tool_args, user_label)
 
-                        # Append tool response
-                        messages.append({
+                        # 1. Fetch Garmin Connect raw data in a non-blocking thread
+                        import asyncio
+                        raw_result = await asyncio.to_thread(execute_garmin_tool, garmin_client, tool_name, tool_args, user_label)
+
+                        # 2. Process raw data with MODEL_WORKER LLM
+                        processed_result = await process_data_with_worker(tool_name, tool_args, raw_result, user_label)
+
+                        return {
                             "role": "tool",
-                            "tool_call_id": tool_call.id,
+                            "tool_call_id": tc.id,
                             "name": tool_name,
-                            "content": tool_result
-                        })
+                            "content": processed_result
+                        }
+
+                    # Execute all requested tools in parallel
+                    import asyncio
+                    tool_tasks = [run_single_tool_pipeline(tc) for tc in response_msg.tool_calls]
+                    tool_responses = await asyncio.gather(*tool_tasks)
+
+                    # Append tool responses to messages history
+                    messages.extend(tool_responses)
 
                     # Continue loop to send tool responses back to LLM
                     continue
