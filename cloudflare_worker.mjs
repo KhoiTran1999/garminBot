@@ -84,7 +84,7 @@ export default {
             } else if (text === "/start" || text === "/help" || text === "/menu") {
                 const replyMarkup = {
                     inline_keyboard: [
-                        [{ text: "📊 Báo cáo Ngày", callback_data: "daily" }],
+                        [{ text: "📊 Sức khỏe & Đề xuất Tập", callback_data: "daily" }],
                         [
                             { text: "💤 Phân tích Ngủ", callback_data: "sleep_analysis" },
                             { text: "🏃 Bài tập", callback_data: "workout" }
@@ -98,7 +98,7 @@ export default {
             } else {
                 const replyMarkup = {
                     inline_keyboard: [
-                        [{ text: "📊 Báo cáo Ngày", callback_data: "daily" }],
+                        [{ text: "📊 Sức khỏe & Đề xuất Tập", callback_data: "daily" }],
                         [
                             { text: "💤 Phân tích Ngủ", callback_data: "sleep_analysis" },
                             { text: "🏃 Bài tập", callback_data: "workout" }

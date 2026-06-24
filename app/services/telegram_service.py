@@ -11,7 +11,7 @@ async def send_telegram_report(bot_token, message, chat_id, user_label="User", a
 
     # Tạo menu nút bấm
     keyboard = [
-        [InlineKeyboardButton("📊 Báo cáo Ngày", callback_data="daily")],
+        [InlineKeyboardButton("📊 Sức khỏe & Đề xuất Tập", callback_data="daily")],
         [InlineKeyboardButton("💤 Phân tích Ngủ", callback_data="sleep_analysis"),
          InlineKeyboardButton("🏃 Bài tập", callback_data="workout")],
         [InlineKeyboardButton("🔋 Bắt mạch Năng lượng", callback_data="battery")]
