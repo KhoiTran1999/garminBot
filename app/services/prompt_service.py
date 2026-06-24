@@ -76,10 +76,10 @@ def get_prompts_from_notion():
                 user_prop = props.get("User Template", {}).get("rich_text", [])
                 user_text = "".join([t.get("plain_text", "") for t in user_prop]) or ""
                 
-                # Get Model (Rich Text or Select) - Fallback to "gemini-3-flash-preview"
-                # Assuming Model is a Rich Text or Select property. Based on image it looks like Multi-select or Select or Text. 
+                # Get Model (Rich Text or Select) - Fallback to Config.ROUTER9_COMBOS_MODEL or "gemini-3.1-pro"
+                # Assuming Model is a Rich Text or Select property. Based on image it looks like Multi-select or Select or Text.
                 # Let's try to get it as rich_text first, if empty then check select.
-                model_text = "gemini-3-flash-preview"
+                model_text = Config.ROUTER9_COMBOS_MODEL or "gemini-3.1-pro"
                 model_prop = props.get("Model", {})
                 if model_prop.get("type") == "rich_text":
                      m_text = "".join([t.get("plain_text", "") for t in model_prop.get("rich_text", [])])

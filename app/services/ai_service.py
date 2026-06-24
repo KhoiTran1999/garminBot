@@ -133,7 +133,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
     avg_daily_load_int = int(l_data['avg_daily_load']) if l_data and 'avg_daily_load' in l_data else 0
 
     formatted_prompt = None
-    default_model = Config.ROUTER9_COMBOS_MODEL or "gemini-3.5-flash"
+    default_model = Config.ROUTER9_COMBOS_MODEL or "gemini-3.1-pro"
     model_to_use = default_model
 
     if prompt_template and isinstance(prompt_template, dict):
@@ -324,7 +324,7 @@ def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None
         aqi_text = f"AQI: {aqi_data.get('aqi', 'N/A')} | PM2.5: {aqi_data.get('pm25', 'N/A')} (Location: {aqi_data.get('city', 'Unknown')})"
 
     formatted_prompt = None
-    default_model = Config.ROUTER9_COMBOS_MODEL or "gemini-3.5-flash"
+    default_model = Config.ROUTER9_COMBOS_MODEL or "gemini-3.1-pro"
     model_to_use = default_model
 
     if prompt_template and isinstance(prompt_template, dict):
@@ -428,7 +428,7 @@ def get_workout_analysis_advice(activity_data_list, user_config, prompt_template
         aqi_text = f"AQI: {aqi_data.get('aqi', 'N/A')} | PM2.5: {aqi_data.get('pm25', 'N/A')} (Location: {aqi_data.get('city', 'Unknown')})"
 
     formatted_prompt = None
-    default_model = Config.ROUTER9_COMBOS_MODEL or "gemini-3.5-flash"
+    default_model = Config.ROUTER9_COMBOS_MODEL or "gemini-3.1-pro"
     model_to_use = default_model
 
     if prompt_template and isinstance(prompt_template, dict):
@@ -528,7 +528,7 @@ def get_speech_script(original_text, user_config, prompt_template=None, mode="da
     context_str = "báo cáo thể thao" if mode == "daily" else "phân tích năng lượng cơ thể" if mode == "battery" else "phân tích giấc ngủ sáng nay"
     
     formatted_prompt = None
-    default_model = Config.ROUTER9_COMBOS_MODEL or "gemini-3.5-flash"
+    default_model = Config.ROUTER9_COMBOS_MODEL or "gemini-3.1-pro"
     model_to_use = default_model
 
     if prompt_template and isinstance(prompt_template, dict):
