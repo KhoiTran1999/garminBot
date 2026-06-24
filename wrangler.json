@@ -1,0 +1,5 @@
+{
+  "name": "garmin-bot-worker",
+  "main": "cloudflare_worker.js",
+  "compatibility_date": "2026-06-24"
+}
