@@ -20,4 +20,5 @@ Chao mung ban den voi he thong ho tro khach hang cua Garmin AI Coach Pro. Duoi d
 *   Mapping Hoat dong: Cac bai tap the thao duoc anh xa chinh xac vao cac khoi thoi gian 2 gio cua bieu do Stress/Body Battery de giup AI phan tich nguyen nhan tang stress/tut pin do tap luyen.
 
 ## 4. Lien He Ho Tro
-*   Neu bot gap loi, khong gui tin nhan, hoac muon thay doi thong tin cau hinh Notion, nguoi dung can lien he truc tiep voi Quan tri vien (Admin) qua Telegram.
+*   Quan tri vien (Admin) Telegram: @KhoiTran99 (ID: 1088200599, Ten: Khoi Tran, Ngon ngu: Tieng Viet).
+*   Neu bot gap loi, khong gui tin nhan, hoac muon thay doi thong tin cau hinh Notion, nguoi dung can lien he truc tiep voi Admin.
