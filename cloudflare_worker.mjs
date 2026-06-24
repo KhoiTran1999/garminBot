@@ -176,11 +176,11 @@ async function triggerGitHub(env, mode, chatId, targetRepo, question = "") {
     // Route to correct repo
     let owner, repo;
     if (targetRepo === "ueh") {
-        owner = env.UEH_GITHUB_OWNER || env.GITHUB_OWNER;
-        repo = env.UEH_GITHUB_REPO;
+        owner = env.UEH_GITHUB_OWNER || env.GITHUB_OWNER || "KhoiTran1999";
+        repo = env.UEH_GITHUB_REPO || "uehNotion";
     } else {
-        owner = env.GITHUB_OWNER;
-        repo = env.GITHUB_REPO;
+        owner = env.GITHUB_OWNER || "KhoiTran1999";
+        repo = env.GITHUB_REPO || "garminBot";
     }
 
     console.log("Triggering GitHub for owner:", owner, "repo:", repo);
