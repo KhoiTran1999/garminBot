@@ -198,5 +198,11 @@ async function triggerGitHub(env, mode, chatId, targetRepo, question = "") {
         },
         body: JSON.stringify(payload)
     });
-    return resp.status === 204;
+
+    if (resp.status !== 204) {
+        console.error("GitHub Dispatch Error Status:", resp.status);
+        console.error("GitHub Dispatch Error Body:", await resp.text());
+        return false;
+    }
+    return true;
 }
