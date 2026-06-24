@@ -13,7 +13,7 @@ async def send_telegram_report(bot_token, message, chat_id, user_label="User", a
     keyboard = [
         [InlineKeyboardButton("📊 Sức khỏe & Đề xuất Tập", callback_data="daily")],
         [InlineKeyboardButton("💤 Phân tích Ngủ", callback_data="sleep_analysis"),
-         InlineKeyboardButton("🏃 Bài tập", callback_data="workout")],
+         InlineKeyboardButton("🏃 Phân tích Buổi tập", callback_data="workout")],
         [InlineKeyboardButton("🔋 Bắt mạch Năng lượng", callback_data="battery")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)

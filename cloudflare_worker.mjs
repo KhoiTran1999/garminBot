@@ -87,7 +87,7 @@ export default {
                         [{ text: "📊 Sức khỏe & Đề xuất Tập", callback_data: "daily" }],
                         [
                             { text: "💤 Phân tích Ngủ", callback_data: "sleep_analysis" },
-                            { text: "🏃 Bài tập", callback_data: "workout" }
+                            { text: "🏃 Phân tích Buổi tập", callback_data: "workout" }
                         ],
                         [{ text: "🔋 Bắt mạch Năng lượng", callback_data: "battery" }]
                     ]
@@ -101,7 +101,7 @@ export default {
                         [{ text: "📊 Sức khỏe & Đề xuất Tập", callback_data: "daily" }],
                         [
                             { text: "💤 Phân tích Ngủ", callback_data: "sleep_analysis" },
-                            { text: "🏃 Bài tập", callback_data: "workout" }
+                            { text: "🏃 Phân tích Buổi tập", callback_data: "workout" }
                         ],
                         [{ text: "🔋 Bắt mạch Năng lượng", callback_data: "battery" }]
                     ]
