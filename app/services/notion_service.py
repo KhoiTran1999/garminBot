@@ -33,7 +33,7 @@ def get_users_from_notion():
         }
     }
 
-    print(f"🔄 Đang tải danh sách người dùng từ Notion...")
+    print("Loading users from Notion...")
     
     try:
         with httpx.Client(timeout=10.0) as client:
@@ -85,9 +85,9 @@ def get_users_from_notion():
                 if user["email"] and user["password"]:
                     users.append(user)
             
-            print(f"✅ Đã tìm thấy {len(users)} người dùng active.")
+            print(f"Found {len(users)} active users.")
             return users
 
     except Exception as e:
-        print(f"❌ Exception khi gọi Notion: {e}")
+        print(f"Exception calling Notion: {e}")
         return []

@@ -52,10 +52,20 @@ async def test_all():
     reports = redis_service.get_ai_context(test_email, test_mode, limit=3)
     print("Latest 3 reports (should only be days 4, 3, 2):", reports)
 
+    # 4. Test Chat History
+    print("\n--- 4. Testing Chat History ---")
+    redis_service.save_chat_message(test_tele_id, "user", "Hello", limit=5)
+    redis_service.save_chat_message(test_tele_id, "assistant", "Hi there!", limit=5)
+    redis_service.save_chat_message(test_tele_id, "user", "How are you?", limit=5)
+
+    history = redis_service.get_chat_history(test_tele_id, limit=5)
+    print("Chat history (should be user Hello, assistant Hi there, user How are you):", history)
+
     # Cleanup test keys
     redis_service._client.delete(f"sent:{test_tele_id}:{test_mode}")
     redis_service._client.delete(f"ratelimit:{test_tele_id}:{test_mode}")
     redis_service._client.delete(f"ai_context:{test_email}:{test_mode}")
+    redis_service._client.delete(f"chat_history:{test_tele_id}")
     print("\n=== TEST COMPLETED SUCCESSFULLY ===")
 
 if __name__ == "__main__":

@@ -32,8 +32,9 @@ jobs:
           NOTION_PROMPT_DATABASE_ID: ${{ secrets.NOTION_PROMPT_DATABASE_ID }}
           GARMINTOKENS_TRANQUOCKHOI1999_GMAIL_COM: ${{ secrets.GARMINTOKENS_TRANQUOCKHOI1999_GMAIL_COM }}
           GARMINTOKENS_KYTRAN0102_GMAIL_COM: ${{ secrets.GARMINTOKENS_KYTRAN0102_GMAIL_COM }}
-        # THAY ĐỔI Ở ĐÂY: Thêm tham số --tele_id
+        # THAY ĐỔI Ở ĐÂY: Thêm tham số --tele_id, --question
         run: |
           python main.py \
             --mode ${{ github.event.client_payload.mode }} \
-            --tele_id "${{ github.event.client_payload.user_id }}"
+            --tele_id "${{ github.event.client_payload.user_id }}" \
+            --question "${{ github.event.client_payload.question }}"

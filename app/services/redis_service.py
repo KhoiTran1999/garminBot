@@ -146,5 +146,50 @@ class RedisService:
 
         return self._execute(_op, default_return=False)
 
+    def get_chat_history(self, tele_id: str, limit: int = 10) -> list:
+        """
+        Get chat history for a user. Returns a list of dicts chronological.
+        """
+        if not tele_id:
+            return []
+
+        key = f"chat_history:{tele_id}"
+
+        def _op():
+            raw_history = self._client.lrange(key, 0, limit - 1)
+            import json
+            history = []
+            for item in raw_history:
+                try:
+                    history.append(json.loads(item))
+                except:
+                    pass
+            history.reverse()
+            return history
+
+        return self._execute(_op, default_return=[])
+
+    def save_chat_message(self, tele_id: str, role: str, content: str, limit: int = 10) -> bool:
+        """
+        Save a chat message to the user's history list.
+        """
+        if not tele_id or not content:
+            return False
+
+        key = f"chat_history:{tele_id}"
+
+        import json
+        message_str = json.dumps({"role": role, "content": content}, ensure_ascii=False)
+
+        def _op():
+            pipe = self._client.pipeline()
+            pipe.lpush(key, message_str)
+            pipe.ltrim(key, 0, limit - 1)
+            pipe.expire(key, 86400) # Keep history for 24 hours
+            pipe.execute()
+            return True
+
+        return self._execute(_op, default_return=False)
+
 # Initialize a global Redis service instance
 redis_service = RedisService()

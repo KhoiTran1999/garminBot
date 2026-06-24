@@ -747,3 +747,101 @@ async def generate_audio_from_text(text, output_file, voice="Sadachbia"):
         default_return=False,
         verbose_label="Gemini TTS"
     )
+
+def get_customer_service_advice(tele_id: str, question: str, user_config: dict, prompt_template: dict = None) -> str:
+    """
+    Hỏi đáp hỗ trợ về tính năng và dữ liệu của Garmin AI Coach Pro.
+    Sử dụng tài liệu HELP.md và lưu lịch sử chat vào Redis.
+    """
+    user_label = user_config.get('name', 'VĐV')
+    email = user_config.get('email')
+
+    # 1. Đọc lịch sử chat từ Redis
+    history = redis_service.get_chat_history(tele_id, limit=10)
+    history_str = ""
+    if history:
+        for msg in history:
+            role_label = "Người dùng" if msg["role"] == "user" else "Trợ lý"
+            history_str += f"{role_label}: {msg['content']}\n"
+    else:
+        history_str = "(Không có lịch sử trò chuyện gần đây)\n"
+
+    # 2. Đọc tài liệu hỗ trợ HELP.md
+    help_doc = ""
+    help_path = os.path.join(os.getcwd(), "HELP.md")
+    if os.path.exists(help_path):
+        try:
+            with open(help_path, "r", encoding="utf-8") as f:
+                help_doc = f.read()
+        except Exception as e:
+            print(f"Error reading HELP.md: {e}")
+            help_doc = "Tài liệu trợ giúp không khả dụng tại local."
+    else:
+        help_doc = "Tài liệu trợ giúp không tồn tại."
+
+    # 3. Chuẩn bị prompt
+    default_model = Config.ROUTER9_COMBOS_MODEL or "gemini-3.1-pro"
+    model_to_use = default_model
+
+    prompt = None
+    if prompt_template and isinstance(prompt_template, dict):
+        sys_p = prompt_template.get("system_prompt", "")
+        user_tmplt = prompt_template.get("user_template", "")
+        model_to_use = prompt_template.get("model", default_model)
+
+        try:
+            formatted_user = user_tmplt.format(
+                user_label=user_label,
+                help_doc=help_doc,
+                chat_history=history_str,
+                question=question
+            )
+            prompt = f"{sys_p}\n\n{formatted_user}"
+        except Exception as e:
+            print(f"Error formatting Notion customer service prompt: {e}")
+            prompt = None
+
+    if not prompt:
+        prompt = f"""
+        Bạn là Trợ lý hỗ trợ khách hàng thân thiện của Garmin AI Coach Pro.
+        Nhiệm vụ của bạn là giải đáp thắc mắc của người dùng về các tính năng, cách thức hoạt động, nguồn dữ liệu và các vấn đề kỹ thuật dựa trên tài liệu được cung cấp dưới đây.
+
+        TÀI LIỆU HƯỚNG DẪN & THÔNG TIN HỆ THỐNG:
+        ---
+        {help_doc}
+        ---
+
+        LỊCH SỬ HỘI THOẠI GẦN ĐÂY:
+        ---
+        {history_str}
+        ---
+
+        YÊU CẦU:
+        1. Trả lời trực tiếp, rõ ràng câu hỏi của người dùng.
+        2. Dựa hoàn toàn vào tài liệu để trả lời. Không tự chế thông tin không có trong tài liệu.
+        3. Nếu câu hỏi không liên quan đến bot hoặc tài liệu không có thông tin, hãy trả lời lịch sự rằng bạn không có thông tin và hướng dẫn họ liên hệ Admin (Telegram Admin ID).
+        4. Giọng điệu thân thiện, chu đáo, hỗ trợ nhiệt tình.
+        5. Trả về định dạng Markdown Telegram (sử dụng dấu * để bold, dùng dấu • cho danh sách).
+
+        CÂU HỎI MỚI CỦA NGƯỜI DÙNG:
+        Người dùng {user_label}: {question}
+        """
+
+    # 4. Gọi AI
+    try:
+        if Config.ROUTER9_API_KEY:
+            ai_reply = call_ai_api(Config.ROUTER9_API_KEY, model_to_use, prompt)
+
+            # 5. Lưu hội thoại mới vào Redis
+            if ai_reply:
+                redis_service.save_chat_message(tele_id, "user", question, limit=10)
+                redis_service.save_chat_message(tele_id, "assistant", ai_reply, limit=10)
+
+            return ai_reply
+        else:
+            print(f"[{user_label}] ROUTER9_API_KEY not found.")
+            return "Tính năng hỏi đáp chưa được cấu hình ROUTER9_API_KEY."
+    except Exception as e:
+        print(f"[{user_label}] AI CS Error: {str(e)}")
+        return "Hiện tại trợ lý AI đang bận. Vui lòng thử lại sau."
+

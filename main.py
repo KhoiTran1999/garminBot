@@ -13,7 +13,7 @@ logging.getLogger("garminconnect").setLevel(logging.CRITICAL)
 # Import Services
 from app.services.notion_service import get_users_from_notion
 from app.services.garmin_service import get_processed_data, fetch_daily_activities_detailed, check_garmin_sync_status
-from app.services.ai_service import get_ai_advice, get_workout_analysis_advice, get_battery_analysis_advice, get_speech_script, generate_audio_from_text
+from app.services.ai_service import get_ai_advice, get_workout_analysis_advice, get_battery_analysis_advice, get_speech_script, generate_audio_from_text, get_customer_service_advice
 from app.services.prompt_service import get_prompts_from_notion
 from app.services.telegram_service import send_telegram_report, send_error_alert, send_progress_update
 from app.services.weather_service import WeatherService
@@ -378,20 +378,56 @@ async def handle_battery_analysis(user_config, prompts):
         if tele_id:
             redis_service.delete_dedup(tele_id, date_iso, mode)
 
+async def handle_ask(user_config, question, prompts):
+    """
+    Xử lý câu hỏi của người dùng (Customer Service Q&A).
+    """
+    name = user_config.get('name', 'Unknown')
+    tele_id = user_config.get('telegram_chat_id')
+
+    if not tele_id:
+        print(f"[{name}] ❌ Thiếu Telegram Chat ID, bỏ qua.")
+        return
+
+    if not question or question.strip() == "" or question == "None":
+        msg = "⚠️ Vui lòng cung cấp câu hỏi sau lệnh /ask."
+        print(f"[{name}] {msg}")
+        await send_telegram_report(TELE_TOKEN, msg, tele_id, name, None)
+        return
+
+    try:
+        # Lấy template prompt từ Notion nếu có
+        ask_template = prompts.get("ask_help")
+        if ask_template:
+            print(f"[{name}] ℹ️ Using Prompt: 'ask_help' (Model: {ask_template.get('model', 'default')})")
+        else:
+            print(f"[{name}] ⚠️ Prompt 'ask_help' not found in Notion. Using Fallback.")
+
+        # Gọi AI CS
+        ai_reply = get_customer_service_advice(tele_id, question, user_config, prompt_template=ask_template)
+
+        # Gửi Telegram
+        await send_telegram_report(TELE_TOKEN, ai_reply, tele_id, name, None)
+
+    except Exception as e:
+        print(f"[{name}] ❌ Lỗi xử lý hỏi đáp: {e}")
+
 async def main():
     parser = argparse.ArgumentParser(description="Garmin AI Coach Pro")
-    parser.add_argument("--mode", default="daily", help="Mode: daily | sleep_analysis | workout | battery")
-    
+    parser.add_argument("--mode", default="daily", help="Mode: daily | sleep_analysis | workout | battery | ask")
+
     # 1. THÊM DÒNG NÀY: Nhận tham số tele_id từ GitHub Action
     parser.add_argument("--tele_id", default=None, help="Filter specific user by Telegram ID")
-    
+    parser.add_argument("--question", default=None, help="The question text for Q&A mode")
+
     args = parser.parse_args()
     mode = args.mode
     filter_tele_id = args.tele_id # Lấy ID cần lọc
+    question = args.question
 
     print(f"=== GARMIN AI COACH PRO: MODE {mode.upper()} ===")
     if filter_tele_id:
-        print(f"🎯 Filter User ID: {filter_tele_id}")
+        print(f"Filter User ID: {filter_tele_id}")
     
     try:
         # 1. Lấy user từ Notion
@@ -404,9 +440,9 @@ async def main():
         if filter_tele_id:
             # Lưu ý: telegram_chat_id trong notion_service.py đang lấy về dạng string (get_text)
             users = [u for u in all_users if str(u.get('telegram_chat_id')) == str(filter_tele_id)]
-            
+
             if not users:
-                print(f"⚠️ Không tìm thấy User nào có Chat ID: {filter_tele_id} (hoặc User đó chưa Active trên Notion).")
+                print(f"User with Chat ID {filter_tele_id} not found or inactive on Notion.")
                 return
         else:
             users = all_users
@@ -422,25 +458,27 @@ async def main():
                 tasks.append(handle_workout_analysis(user, prompts))
             elif mode == "battery":
                 tasks.append(handle_battery_analysis(user, prompts))
+            elif mode == "ask":
+                tasks.append(handle_ask(user, question, prompts))
             elif mode in ["daily", "daily_report", "sleep_analysis"]:
                 # Clean up mode string explicitly if needed
                 run_mode = "sleep_analysis" if mode == "sleep_analysis" else "daily"
                 tasks.append(handle_daily_or_sleep(user, run_mode, prompts))
             else:
-                print(f"❌ Unknown mode: {mode}")
+                print(f"Unknown mode: {mode}")
                 return
 
         await asyncio.gather(*tasks)
-        print("\n=== HOÀN TẤT ===")
+        print("\n=== COMPLETE ===")
 
     except Exception as e:
         error_msg = f"CRITICAL ERROR in main.py (Mode: {mode}):\n{str(e)}"
-        print(f"❌ {error_msg}")
+        print(f"Error: {error_msg}")
         # Gửi alert
         if TELE_ADMIN:
              await send_error_alert(TELE_TOKEN, TELE_ADMIN, error_msg)
         else:
-             print("⚠️ Config TELEGRAM_ADMIN_ID chưa được set, không gửi alert.")
+             print("Config TELEGRAM_ADMIN_ID not set, alert not sent.")
         raise e # Re-raise để GitHub Actions vẫn báo fail
 
 if __name__ == "__main__":
