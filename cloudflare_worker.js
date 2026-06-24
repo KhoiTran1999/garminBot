@@ -41,9 +41,19 @@ export default {
             // 2. Handle Commands & Callbacks
             let mode = "";
             let targetRepo = "";
+            let question = "";
 
             // === GARMIN BOT Commands ===
-            if (text === "/daily" || text === "daily" || text === "/report") {
+            if (text.startsWith("/ask")) {
+                mode = "ask";
+                targetRepo = "garmin";
+                question = text.substring(4).trim();
+                if (!question) {
+                    await sendMessage(env, chatId, "⚠️ Vui lòng nhập câu hỏi sau lệnh /ask.");
+                    return new Response("OK");
+                }
+                await sendMessage(env, chatId, "💬 Đang trả lời...");
+            } else if (text === "/daily" || text === "daily" || text === "/report") {
                 mode = "daily";
                 targetRepo = "garmin";
                 await sendMessage(env, chatId, "🚀 Đang lấy báo cáo ngày...");
@@ -91,7 +101,7 @@ export default {
 
             // 3. Trigger GitHub (route to correct repo)
             if (mode && targetRepo) {
-                const success = await triggerGitHub(env, mode, chatId, targetRepo);
+                const success = await triggerGitHub(env, mode, chatId, targetRepo, question);
                 if (!success) {
                     await sendMessage(env, chatId, "⚠️ Lỗi hệ thống khi gọi Bot. Thử lại sau.");
                 }
@@ -150,7 +160,7 @@ async function sendMessage(env, chatId, text, replyMarkup = null) {
     });
 }
 
-async function triggerGitHub(env, mode, chatId, targetRepo) {
+async function triggerGitHub(env, mode, chatId, targetRepo, question = "") {
     // Route to correct repo
     let owner, repo;
     if (targetRepo === "ueh") {
@@ -164,7 +174,7 @@ async function triggerGitHub(env, mode, chatId, targetRepo) {
     const url = `https://api.github.com/repos/${owner}/${repo}/dispatches`;
     const payload = {
         event_type: "telegram_command",
-        client_payload: { mode: mode, user_id: chatId }
+        client_payload: { mode: mode, user_id: chatId, question: question }
     };
 
     const resp = await fetch(url, {
