@@ -183,6 +183,9 @@ async function triggerGitHub(env, mode, chatId, targetRepo, question = "") {
         repo = env.GITHUB_REPO;
     }
 
+    console.log("Triggering GitHub for owner:", owner, "repo:", repo);
+    console.log("Using token starting with:", env.GITHUB_TOKEN ? env.GITHUB_TOKEN.substring(0, 4) + "..." : "undefined");
+
     const url = `https://api.github.com/repos/${owner}/${repo}/dispatches`;
     const payload = {
         event_type: "telegram_command",
