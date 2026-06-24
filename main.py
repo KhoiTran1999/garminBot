@@ -380,9 +380,11 @@ async def handle_battery_analysis(user_config, prompts):
 
 async def handle_ask(user_config, question, prompts):
     """
-    Xử lý câu hỏi của người dùng (Customer Service Q&A).
+    Xử lý câu hỏi của người dùng (Customer Service Q&A & Garmin Data Retrieval).
     """
     name = user_config.get('name', 'Unknown')
+    email = user_config.get('email')
+    password = user_config.get('password')
     tele_id = user_config.get('telegram_chat_id')
 
     if not tele_id:
@@ -403,8 +405,23 @@ async def handle_ask(user_config, question, prompts):
         else:
             print(f"[{name}] ⚠️ Prompt 'ask_help' not found in Notion. Using Fallback.")
 
-        # Gọi AI CS
-        ai_reply = get_customer_service_advice(tele_id, question, user_config, prompt_template=ask_template)
+        # Đăng nhập Garmin Connect (tận dụng token cache)
+        client = None
+        if email and password:
+            try:
+                client = login_garmin(email, password, name)
+                print(f"[{name}] 🧠 Garmin client loaded for Agent.")
+            except Exception as ge:
+                print(f"[{name}] ⚠️ Lỗi đăng nhập Garmin Connect: {ge}")
+
+        # Gọi AI CS (Agent / Tool Calling)
+        ai_reply = await get_customer_service_advice(
+            tele_id=tele_id,
+            question=question,
+            user_config=user_config,
+            prompt_template=ask_template,
+            garmin_client=client
+        )
 
         # Gửi Telegram
         await send_telegram_report(TELE_TOKEN, ai_reply, tele_id, name, None)

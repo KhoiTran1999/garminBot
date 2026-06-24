@@ -144,7 +144,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
     avg_daily_load_int = int(l_data['avg_daily_load']) if l_data and 'avg_daily_load' in l_data else 0
 
     formatted_prompt = None
-    default_model = Config.ROUTER9_COMBOS_MODEL or "gemini-3.1-pro"
+    default_model = Config.MODEL_WORKER
     model_to_use = default_model
 
     if prompt_template and isinstance(prompt_template, dict):
@@ -354,7 +354,7 @@ def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None
         aqi_text = f"AQI: {aqi_data.get('aqi', 'N/A')} | PM2.5: {aqi_data.get('pm25', 'N/A')} (Location: {aqi_data.get('city', 'Unknown')})"
 
     formatted_prompt = None
-    default_model = Config.ROUTER9_COMBOS_MODEL or "gemini-3.1-pro"
+    default_model = Config.MODEL_WORKER
     model_to_use = default_model
 
     if prompt_template and isinstance(prompt_template, dict):
@@ -477,7 +477,7 @@ def get_workout_analysis_advice(activity_data_list, user_config, prompt_template
         aqi_text = f"AQI: {aqi_data.get('aqi', 'N/A')} | PM2.5: {aqi_data.get('pm25', 'N/A')} (Location: {aqi_data.get('city', 'Unknown')})"
 
     formatted_prompt = None
-    default_model = Config.ROUTER9_COMBOS_MODEL or "gemini-3.1-pro"
+    default_model = Config.MODEL_WORKER
     model_to_use = default_model
 
     if prompt_template and isinstance(prompt_template, dict):
@@ -585,7 +585,7 @@ def get_speech_script(original_text, user_config, prompt_template=None, mode="da
     context_str = "báo cáo thể thao" if mode == "daily" else "phân tích năng lượng cơ thể" if mode == "battery" else "phân tích giấc ngủ sáng nay"
     
     formatted_prompt = None
-    default_model = Config.ROUTER9_COMBOS_MODEL or "gemini-3.1-pro"
+    default_model = Config.MODEL_WORKER
     model_to_use = default_model
 
     if prompt_template and isinstance(prompt_template, dict):
@@ -748,10 +748,394 @@ async def generate_audio_from_text(text, output_file, voice="Sadachbia"):
         verbose_label="Gemini TTS"
     )
 
-def get_customer_service_advice(tele_id: str, question: str, user_config: dict, prompt_template: dict = None) -> str:
+GARMIN_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_health_summary",
+            "description": "Lấy dữ liệu sức khỏe tổng quan trong ngày (Nhịp tim nghỉ RHR, bước chân, mức stress trung bình, body battery).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "Ngày cần lấy dữ liệu định dạng YYYY-MM-DD (Ví dụ: 2026-06-24)."
+                    }
+                },
+                "required": ["date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_sleep_analysis",
+            "description": "Lấy phân tích giấc ngủ chi tiết (thời gian ngủ sâu, ngủ nông, ngủ REM, thời gian thức, đánh giá giấc ngủ).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "Ngày cần lấy dữ liệu định dạng YYYY-MM-DD. Lưu ý: Ngày của giấc ngủ là ngày thức dậy (Ví dụ: ngủ đêm 23/06 thức dậy sáng 24/06 thì truyền ngày 2026-06-24)."
+                    }
+                },
+                "required": ["date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_stress_trend",
+            "description": "Lấy dữ liệu mức căng thẳng (Stress) chi tiết trong ngày.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "Ngày cần lấy dữ liệu định dạng YYYY-MM-DD."
+                    }
+                },
+                "required": ["date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_body_battery_trend",
+            "description": "Lấy dữ liệu Pin cơ thể (Body Battery) và các giấc ngủ ngắn (naps) trong ngày.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "Ngày cần lấy dữ liệu định dạng YYYY-MM-DD."
+                    }
+                },
+                "required": ["date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_activities",
+            "description": "Lấy danh sách các hoạt động thể thao (chạy bộ, đạp xe, bơi lội, gym...) trong khoảng thời gian xác định.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "start_date": {
+                        "type": "string",
+                        "description": "Ngày bắt đầu định dạng YYYY-MM-DD."
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "description": "Ngày kết thúc định dạng YYYY-MM-DD. Nếu không truyền, mặc định bằng start_date."
+                    }
+                },
+                "required": ["start_date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_activity_details",
+            "description": "Lấy chi tiết một bài tập cụ thể bao gồm splits, nhịp tim theo vùng (HR zones), thời tiết, và biểu đồ chi tiết.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "activity_id": {
+                        "type": "integer",
+                        "description": "ID của hoạt động thể thao."
+                    }
+                },
+                "required": ["activity_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_hrv_data",
+            "description": "Lấy dữ liệu biến thiên nhịp tim HRV (Heart Rate Variability) đêm qua hoặc ngày cụ thể.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "Ngày cần lấy dữ liệu định dạng YYYY-MM-DD."
+                    }
+                },
+                "required": ["date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_spo2_data",
+            "description": "Lấy dữ liệu nồng độ oxy trong máu SpO2 trung bình, thấp nhất trong ngày.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "Ngày cần lấy dữ liệu định dạng YYYY-MM-DD."
+                    }
+                },
+                "required": ["date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_respiration_data",
+            "description": "Lấy dữ liệu nhịp thở (Respiration) trung bình khi thức, khi ngủ trong ngày.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "Ngày cần lấy dữ liệu định dạng YYYY-MM-DD."
+                    }
+                },
+                "required": ["date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_training_readiness",
+            "description": "Lấy điểm sẵn sàng tập luyện (Training Readiness) và các yếu tố ảnh hưởng (thời gian phục hồi, lịch sử giấc ngủ, HRV, stress, lịch sử tập luyện).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "Ngày cần lấy dữ liệu định dạng YYYY-MM-DD."
+                    }
+                },
+                "required": ["date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_training_status",
+            "description": "Lấy trạng thái tập luyện hiện tại (Training Status), VO2 Max, Tải tập luyện 7 ngày qua.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "Ngày cần lấy dữ liệu định dạng YYYY-MM-DD."
+                    }
+                },
+                "required": ["date"]
+            }
+        }
+    }
+]
+
+def execute_garmin_tool(client, name: str, args: dict, user_label: str = "User") -> str:
     """
-    Hỏi đáp hỗ trợ về tính năng và dữ liệu của Garmin AI Coach Pro.
-    Sử dụng tài liệu HELP.md và lưu lịch sử chat vào Redis.
+    Thực thi các hàm lấy dữ liệu Garmin tương ứng với Tool Call của AI.
+    """
+    import json
+    if not client:
+        return json.dumps({"error": "Garmin client is not logged in. Tell user to login or configure credentials."})
+
+    date_str = args.get("date")
+
+    try:
+        if name == "get_health_summary":
+            summary = client.get_user_summary(date_str)
+            stats = summary.get('stats', summary)
+            rhr = stats.get('restingHeartRate') or 0
+            stress = stats.get('averageStressLevel') or 0
+            bb_val = summary.get('stats_and_body', {}).get('bodyBatteryMostRecentValue')
+            if bb_val is None: bb_val = stats.get('bodyBatteryMostRecentValue') or 0
+            steps = stats.get('steps') or stats.get('totalSteps') or 0
+            return json.dumps({
+                "resting_heart_rate": rhr,
+                "average_stress": stress,
+                "body_battery": bb_val,
+                "steps": steps
+            }, ensure_ascii=False)
+
+        elif name == "get_sleep_analysis":
+            from app.services.garmin_service import get_sleep_analysis
+            _, sleep_desc = get_sleep_analysis(client, date_str, user_label)
+            return json.dumps({"sleep_analysis": sleep_desc}, ensure_ascii=False)
+
+        elif name == "get_stress_trend":
+            stress_data = client.get_stress_data(date_str) or {}
+            avg_stress = stress_data.get('avgStress') or stress_data.get('averageStressLevel')
+            stress_duration = stress_data.get('stressDuration')
+            return json.dumps({
+                "average_stress": avg_stress,
+                "stress_duration_details": stress_duration,
+                "summary": {k: v for k, v in stress_data.items() if k not in ['stressValuesArray', 'bodyBatteryValuesArray']}
+            }, ensure_ascii=False)
+
+        elif name == "get_body_battery_trend":
+            bb_data = client.get_body_battery(date_str) or []
+            events = client.get_body_battery_events(date_str) or []
+            naps = [e for e in events if e.get('eventType') == 'NAP']
+
+            nap_details = []
+            for nap in naps:
+                dur_ms = nap.get('durationInMilliseconds') or 0
+                nap_details.append({
+                    "start_time": nap.get('startTimeLocal'),
+                    "duration_minutes": int(dur_ms / 60000)
+                })
+
+            bb_values = []
+            if isinstance(bb_data, list):
+                bb_values = bb_data
+            elif isinstance(bb_data, dict):
+                bb_values = bb_data.get('bodyBatteryValuesArray') or []
+
+            charged = 0
+            drained = 0
+            if isinstance(bb_data, dict):
+                charged = bb_data.get('chargedValue') or 0
+                drained = bb_data.get('drainedValue') or 0
+
+            return json.dumps({
+                "charged": charged,
+                "drained": drained,
+                "naps": nap_details,
+                "values_count": len(bb_values)
+            }, ensure_ascii=False)
+
+        elif name == "get_activities":
+            start = args.get("start_date")
+            end = args.get("end_date") or start
+            activities = client.get_activities_by_date(start, end) or []
+
+            results = []
+            for act in activities:
+                results.append({
+                    "activityId": act.get("activityId"),
+                    "activityName": act.get("activityName"),
+                    "activityType": act.get("activityType", {}).get("typeKey"),
+                    "startTimeLocal": act.get("startTimeLocal"),
+                    "duration_minutes": round(act.get("duration", 0) / 60, 1),
+                    "distance_km": round(act.get("distance", 0) / 1000, 2),
+                    "averageHR": act.get("averageHR"),
+                    "maxHR": act.get("maxHR"),
+                    "calories": act.get("calories")
+                })
+            return json.dumps(results, ensure_ascii=False)
+
+        elif name == "get_activity_details":
+            act_id = args.get("activity_id")
+            splits = None
+            try:
+                splits = client.get_activity_splits(act_id)
+            except Exception: pass
+
+            weather = None
+            try:
+                weather = client.get_activity_weather(act_id)
+            except Exception: pass
+
+            hr_zones = None
+            try:
+                hr_zones = client.get_activity_hr_in_timezones(act_id)
+            except Exception: pass
+
+            return json.dumps({
+                "activityId": act_id,
+                "splits": splits,
+                "weather": weather,
+                "hr_zones": hr_zones
+            }, ensure_ascii=False)
+
+        elif name == "get_hrv_data":
+            hrv = client.get_hrv_data(date_str) or {}
+            hrv_summary = hrv.get("hrvSummary") or hrv
+            return json.dumps({
+                "hrvStatus": hrv_summary.get("hrvStatus"),
+                "lastNightAvg": hrv_summary.get("lastNightAvg"),
+                "weeklyAvg": hrv_summary.get("weeklyAvg"),
+                "baseline": hrv_summary.get("baseline")
+            }, ensure_ascii=False)
+
+        elif name == "get_spo2_data":
+            spo2 = client.get_spo2_data(date_str) or {}
+            return json.dumps({
+                "averageSpO2": spo2.get("averageSpO2"),
+                "lowestSpO2": spo2.get("lowestSpO2"),
+                "latestSpO2": spo2.get("latestSpO2")
+            }, ensure_ascii=False)
+
+        elif name == "get_respiration_data":
+            resp = client.get_respiration_data(date_str) or {}
+            return json.dumps({
+                "avgWakingRespirationValue": resp.get("avgWakingRespirationValue"),
+                "avgSleepRespirationValue": resp.get("avgSleepRespirationValue"),
+                "lowestRespirationValue": resp.get("lowestRespirationValue"),
+                "highestRespirationValue": resp.get("highestRespirationValue")
+            }, ensure_ascii=False)
+
+        elif name == "get_training_readiness":
+            readiness = client.get_training_readiness(date_str) or {}
+            r_map = readiness.get("trainingReadinessMap") or readiness
+            return json.dumps({
+                "score": r_map.get("scoreValue"),
+                "assessment": r_map.get("readinessAssessment"),
+                "recovery_time_hours": r_map.get("recoveryTimeHours"),
+                "sleep_history_score": r_map.get("sleepHistoryScoreValue"),
+                "hrv_status": r_map.get("hrvStatus"),
+                "stress_history_score": r_map.get("stressHistoryScoreValue")
+            }, ensure_ascii=False)
+
+        elif name == "get_training_status":
+            status = client.get_training_status(date_str) or {}
+            ts_map = status.get("trainingStatusAssessment") or status
+            return json.dumps({
+                "trainingStatus": ts_map.get("trainingStatus"),
+                "vo2Max": status.get("vo2Max"),
+                "fitnessStatus": ts_map.get("fitnessStatus"),
+                "loadStatus": ts_map.get("loadStatus"),
+                "sevenDayAcuteLoad": status.get("sevenDayAcuteLoad")
+            }, ensure_ascii=False)
+
+        else:
+            return json.dumps({"error": f"Unknown tool: {name}"})
+
+    except Exception as e:
+        print(f"[{user_label}] Error executing tool {name}: {e}")
+        return json.dumps({"error": f"Lỗi khi truy xuất dữ liệu {name}: {str(e)}"}, ensure_ascii=False)
+
+def call_ai_api_raw(api_key, model_name, messages, tools=None):
+    from openai import OpenAI
+    client = OpenAI(
+        base_url="https://khoitran1999-claude-server.hf.space/v1",
+        api_key=api_key
+    )
+    kwargs = {
+        "model": model_name,
+        "messages": messages,
+        "stream": False
+    }
+    if tools:
+        kwargs["tools"] = tools
+
+    response = client.chat.completions.create(**kwargs)
+    return response.choices[0].message
+
+async def get_customer_service_advice(tele_id: str, question: str, user_config: dict, prompt_template: dict = None, garmin_context: str = None, garmin_client = None) -> str:
+    """
+    Hỏi đáp hỗ trợ về tính năng và dữ liệu của Garmin Connect sử dụng Tool Calling / Agent.
     """
     user_label = user_config.get('name', 'VĐV')
     email = user_config.get('email')
@@ -780,68 +1164,232 @@ def get_customer_service_advice(tele_id: str, question: str, user_config: dict, 
         help_doc = "Tài liệu trợ giúp không tồn tại."
 
     # 3. Chuẩn bị prompt
-    default_model = Config.ROUTER9_COMBOS_MODEL or "gemini-3.1-pro"
+    default_model = Config.MODEL_BRAIN
     model_to_use = default_model
 
-    prompt = None
+    vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+    current_date_str = datetime.now(vn_tz).strftime("%Y-%m-%d")
+
+    goal = user_config.get('goal', 'Duy trì sức khỏe')
+    injury = user_config.get('injury', 'Không có')
+    note = user_config.get('note', '')
+    user_profile = f"Mục tiêu: {goal} | Chấn thương: {injury} | Ghi chú thêm: {note}"
+
+    system_instruction = f"""Bạn là Trợ lý hỗ trợ khách hàng thân thiện của Garmin AI Coach Pro.
+Nhiệm vụ của bạn là giải đáp thắc mắc của người dùng về các tính năng, cách thức hoạt động, nguồn dữ liệu và các vấn đề kỹ thuật dựa trên tài liệu được cung cấp.
+
+Tài khoản Garmin Connect của người dùng hiện ĐÃ ĐĂNG NHẬP thành công và sẵn sàng để truy xuất dữ liệu.
+Nếu câu hỏi của người dùng liên quan đến dữ liệu cá nhân, sức khỏe, giấc ngủ, tập luyện hoặc bất kỳ chỉ số nào từ Garmin của họ, bạn PHẢI sử dụng các công cụ (tools) được cung cấp để lấy dữ liệu tương ứng.
+Hãy luôn mặc định ngày cần lấy là hôm nay ({current_date_str}) trừ khi người dùng nói cụ thể mốc thời gian khác (ví dụ: hôm qua, 3 ngày trước, ngày 2026-06-20). Hãy quy đổi thông minh các mốc thời gian này về định dạng YYYY-MM-DD dựa trên ngày hôm nay.
+
+Sau khi gọi tools và lấy được dữ liệu, hãy phân tích kỹ, tổng hợp và đưa ra đánh giá, nhận xét cũng như lời khuyên cá nhân hóa hữu ích dựa trên hồ sơ của người dùng.
+
+Hồ sơ người dùng:
+- {user_profile}
+
+Ngày hiện tại (Hôm nay): {current_date_str}
+
+TÀI LIỆU HƯỚNG DẪN & THÔNG TIN HỆ THỐNG:
+---
+{help_doc}
+---
+
+YÊU CẦU:
+1. Trả lời trực tiếp, rõ ràng câu hỏi của người dùng.
+2. Dựa hoàn toàn vào tài liệu và dữ liệu sức khỏe từ các công cụ (nếu có) để trả lời. Không tự chế thông tin không có trong tài liệu/dữ liệu trả về.
+3. Nếu câu hỏi liên quan đến chỉ số sức khỏe của người dùng mà bạn không thể truy xuất được hoặc công cụ báo lỗi, hãy lịch sự thông báo cho họ đồng bộ thiết bị hoặc thử lại sau.
+4. Giọng điệu thân thiện, chu đáo, hỗ trợ nhiệt tình.
+5. Trả về định dạng Markdown Telegram (sử dụng dấu * để bold, dùng dấu • cho danh sách).
+"""
+
     if prompt_template and isinstance(prompt_template, dict):
         sys_p = prompt_template.get("system_prompt", "")
+        if sys_p:
+            system_instruction = f"{sys_p}\n\nThông tin hệ thống & Người dùng:\n- Ngày hôm nay: {current_date_str}\n- Hồ sơ người dùng: {user_profile}\n- Tài liệu trợ giúp:\n{help_doc}"
+
+    # Build conversation messages
+    messages = [{"role": "system", "content": system_instruction}]
+
+    # Add historical messages (convert roles if needed, ensuring they follow OpenAI standard)
+    if history:
+        for msg in history:
+            role = msg.get("role")
+            if role in ["user", "assistant"]:
+                messages.append({"role": role, "content": msg.get("content", "")})
+
+    # Add current query
+    user_query = question
+    if prompt_template and isinstance(prompt_template, dict):
         user_tmplt = prompt_template.get("user_template", "")
         model_to_use = prompt_template.get("model", default_model)
+        if user_tmplt:
+            try:
+                user_query = user_tmplt.format(
+                    user_label=user_label,
+                    help_doc=help_doc,
+                    chat_history=history_str,
+                    question=question,
+                    garmin_info=garmin_context or "",
+                    garmin_context=garmin_context or ""
+                )
+            except Exception:
+                pass
 
-        try:
-            formatted_user = user_tmplt.format(
-                user_label=user_label,
-                help_doc=help_doc,
-                chat_history=history_str,
-                question=question
-            )
-            prompt = f"{sys_p}\n\n{formatted_user}"
-        except Exception as e:
-            print(f"Error formatting Notion customer service prompt: {e}")
-            prompt = None
+    messages.append({"role": "user", "content": user_query})
 
-    if not prompt:
-        prompt = f"""
-        Bạn là Trợ lý hỗ trợ khách hàng thân thiện của Garmin AI Coach Pro.
-        Nhiệm vụ của bạn là giải đáp thắc mắc của người dùng về các tính năng, cách thức hoạt động, nguồn dữ liệu và các vấn đề kỹ thuật dựa trên tài liệu được cung cấp dưới đây.
-
-        TÀI LIỆU HƯỚNG DẪN & THÔNG TIN HỆ THỐNG:
-        ---
-        {help_doc}
-        ---
-
-        LỊCH SỬ HỘI THOẠI GẦN ĐÂY:
-        ---
-        {history_str}
-        ---
-
-        YÊU CẦU:
-        1. Trả lời trực tiếp, rõ ràng câu hỏi của người dùng.
-        2. Dựa hoàn toàn vào tài liệu để trả lời. Không tự chế thông tin không có trong tài liệu.
-        3. Nếu câu hỏi không liên quan đến bot hoặc tài liệu không có thông tin, hãy trả lời lịch sự rằng bạn không có thông tin và hướng dẫn họ liên hệ Admin (Telegram Admin ID).
-        4. Giọng điệu thân thiện, chu đáo, hỗ trợ nhiệt tình.
-        5. Trả về định dạng Markdown Telegram (sử dụng dấu * để bold, dùng dấu • cho danh sách).
-
-        CÂU HỎI MỚI CỦA NGƯỜI DÙNG:
-        Người dùng {user_label}: {question}
-        """
-
-    # 4. Gọi AI
+    # 4. Gọi AI với Tool Calling loop
     try:
         if Config.ROUTER9_API_KEY:
-            ai_reply = call_ai_api(Config.ROUTER9_API_KEY, model_to_use, prompt)
+            max_iterations = 5
+            for iteration in range(max_iterations):
+                print(f"[{user_label}] Calling LLM (iteration {iteration+1})...")
+                response_msg = call_ai_api_raw(
+                    api_key=Config.ROUTER9_API_KEY,
+                    model_name=model_to_use,
+                    messages=messages,
+                    tools=GARMIN_TOOLS if garmin_client else None
+                )
 
-            # 5. Lưu hội thoại mới vào Redis
-            if ai_reply:
-                redis_service.save_chat_message(tele_id, "user", question, limit=10)
-                redis_service.save_chat_message(tele_id, "assistant", ai_reply, limit=10)
+                # Check for tool calls
+                if response_msg.tool_calls:
+                    # Append assistant message with tool calls
+                    assistant_msg = {
+                        "role": "assistant",
+                        "content": response_msg.content,
+                        "tool_calls": [
+                            {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments
+                                }
+                            } for tc in response_msg.tool_calls
+                        ]
+                    }
+                    messages.append(assistant_msg)
 
-            return ai_reply
+                    # Execute each tool
+                    for tool_call in response_msg.tool_calls:
+                        tool_name = tool_call.function.name
+                        import json
+                        try:
+                            tool_args = json.loads(tool_call.function.arguments)
+                        except Exception as je:
+                            print(f"Error parsing tool args: {je}")
+                            tool_args = {}
+
+                        # Normalize/fallback dates
+                        if "date" in tool_args and not tool_args["date"]:
+                            tool_args["date"] = current_date_str
+                        if "start_date" in tool_args and not tool_args["start_date"]:
+                            tool_args["start_date"] = current_date_str
+
+                        print(f"[{user_label}] 🛠️ AI requests tool: {tool_name} with args {tool_args}")
+                        tool_result = execute_garmin_tool(garmin_client, tool_name, tool_args, user_label)
+
+                        # Append tool response
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "name": tool_name,
+                            "content": tool_result
+                        })
+
+                    # Continue loop to send tool responses back to LLM
+                    continue
+                else:
+                    # Final answer received
+                    ai_reply = response_msg.content
+                    if ai_reply:
+                        redis_service.save_chat_message(tele_id, "user", question, limit=10)
+                        redis_service.save_chat_message(tele_id, "assistant", ai_reply, limit=10)
+                    return ai_reply
+
+            return "Không thể hoàn thành yêu cầu vì vượt quá số lần gọi công cụ cho phép."
         else:
             print(f"[{user_label}] ROUTER9_API_KEY not found.")
             return "Tính năng hỏi đáp chưa được cấu hình ROUTER9_API_KEY."
     except Exception as e:
-        print(f"[{user_label}] AI CS Error: {str(e)}")
+        print(f"[{user_label}] AI CS Error in agent loop: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return "Hiện tại trợ lý AI đang bận. Vui lòng thử lại sau."
+
+
+def route_ask_query(question: str, current_date_str: str) -> dict:
+    """
+    Sử dụng AI để phân tích câu hỏi người dùng và quyết định xem có cần lấy dữ liệu Garmin không.
+    """
+    prompt = f"""
+    Bạn là Router phân loại câu hỏi cho Garmin AI Coach.
+    Hãy phân tích câu hỏi của người dùng và ngày hiện tại để quyết định xem hệ thống có cần truy xuất dữ liệu sức khỏe/tập luyện từ Garmin Connect hay không.
+
+    Ngày hiện tại (Hôm nay): {current_date_str}
+
+    Các loại dữ liệu có thể lấy:
+    - "summary": Chỉ số tổng quan (Nhịp tim nghỉ RHR, stress trung bình, body battery hiện tại, SpO2, nhịp thở, hrv, trạng thái tập luyện).
+    - "sleep": Chi tiết giấc ngủ đêm qua hoặc các đêm trước (thời gian ngủ sâu, ngủ nông, REM, thời gian thức).
+    - "activities": Hoạt động thể thao (chạy bộ, đạp xe, bơi lội, pace, quãng đường, nhịp tim khi tập).
+    - "timeseries": Biểu đồ chi tiết 24h qua (stress và pin cơ thể biến động theo từng mốc 2h).
+
+    Trả về kết quả dưới dạng JSON duy nhất, KHÔNG chứa thêm bất kỳ text giải thích nào khác ngoài JSON, định dạng như sau:
+    {{
+      "needs_garmin_data": true hoặc false,
+      "metrics": danh sách các chuỗi (chọn từ ["summary", "sleep", "activities", "timeseries"]),
+      "date": "YYYY-MM-DD" (Quy đổi các mốc thời gian như "hôm qua", "hôm nay", "sáng nay", "tối qua", "ngày mai" về định dạng ngày cụ thể YYYY-MM-DD dựa trên ngày hiện tại)
+    }}
+
+    Ví dụ 1:
+    Câu hỏi: "stress buổi sáng của mình là bao nhiêu"
+    Kết quả:
+    {{
+      "needs_garmin_data": true,
+      "metrics": ["summary", "timeseries"],
+      "date": "{current_date_str}"
+    }}
+
+    Ví dụ 2:
+    Câu hỏi: "Làm thế nào để đổi múi giờ trên Garmin?"
+    Kết quả:
+    {{
+      "needs_garmin_data": false,
+      "metrics": [],
+      "date": "{current_date_str}"
+    }}
+
+    Hãy phân tích câu hỏi sau:
+    Câu hỏi: "{question}"
+    """
+
+    default_res = {
+        "needs_garmin_data": False,
+        "metrics": [],
+        "date": current_date_str
+    }
+
+    try:
+        if not Config.ROUTER9_API_KEY:
+            return default_res
+
+        model_to_use = Config.MODEL_BRAIN
+        response_text = call_ai_api(Config.ROUTER9_API_KEY, model_to_use, prompt)
+
+        import json
+        import re
+
+        cleaned_text = response_text.strip()
+        json_match = re.search(r'\{.*\}', cleaned_text, re.DOTALL)
+        if json_match:
+            cleaned_text = json_match.group(0)
+
+        data = json.loads(cleaned_text)
+        return {
+            "needs_garmin_data": bool(data.get("needs_garmin_data", False)),
+            "metrics": list(data.get("metrics", [])),
+            "date": str(data.get("date", current_date_str))
+        }
+    except Exception as e:
+        print(f"⚠️ Error in route_ask_query: {e}")
+        return default_res
 
