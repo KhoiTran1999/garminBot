@@ -96,6 +96,18 @@ export default {
                 await sendMessage(env, chatId, "👋 Chào mừng bạn đến với **Garmin AI Coach**!\nHãy chọn chức năng để bắt đầu:", replyMarkup);
                 return new Response("OK");
             } else {
+                const replyMarkup = {
+                    inline_keyboard: [
+                        [{ text: "📊 Báo cáo Ngày", callback_data: "daily" }],
+                        [
+                            { text: "💤 Phân tích Ngủ", callback_data: "sleep_analysis" },
+                            { text: "🏃 Bài tập", callback_data: "workout" }
+                        ],
+                        [{ text: "🔋 Bắt mạch Năng lượng", callback_data: "battery" }]
+                    ]
+                };
+
+                await sendMessage(env, chatId, "👋 Tôi chưa hiểu lệnh của bạn.\nHãy gõ `/ask <câu hỏi>` để trò chuyện với AI, hoặc sử dụng menu dưới đây để yêu cầu báo cáo:", replyMarkup);
                 return new Response("OK");
             }
 
