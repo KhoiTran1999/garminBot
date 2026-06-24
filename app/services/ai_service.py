@@ -312,7 +312,8 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
         if Config.ROUTER9_API_KEY:
             ai_report = call_ai_api(Config.ROUTER9_API_KEY, model_to_use, prompt)
             if ai_report and email:
-                redis_service.save_ai_context(email, mode, ai_report)
+                report_with_time = f"--- [Thời gian báo cáo: {current_now}] ---\n{ai_report}"
+                redis_service.save_ai_context(email, mode, report_with_time)
             return ai_report
         else:
              print(f"[{user_label}] ROUTER9_API_KEY not found.")
@@ -431,7 +432,8 @@ def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None
         if Config.ROUTER9_API_KEY:
             ai_report = call_ai_api(Config.ROUTER9_API_KEY, model_to_use, prompt)
             if ai_report and email:
-                redis_service.save_ai_context(email, mode, ai_report)
+                report_with_time = f"--- [Thời gian báo cáo: {current_now}] ---\n{ai_report}"
+                redis_service.save_ai_context(email, mode, report_with_time)
             return ai_report
         else:
              print(f"[{user_label}] ROUTER9_API_KEY not found.")
@@ -563,7 +565,8 @@ def get_workout_analysis_advice(activity_data_list, user_config, prompt_template
         if Config.ROUTER9_API_KEY:
             ai_report = call_ai_api(Config.ROUTER9_API_KEY, model_to_use, prompt)
             if ai_report and email:
-                redis_service.save_ai_context(email, mode, ai_report)
+                report_with_time = f"--- [Thời gian báo cáo: {current_now}] ---\n{ai_report}"
+                redis_service.save_ai_context(email, mode, report_with_time)
             return ai_report
         else:
              print(f"[{user_label}] ROUTER9_API_KEY not found.")
