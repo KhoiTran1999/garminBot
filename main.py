@@ -17,6 +17,7 @@ from app.services.ai_service import get_ai_advice, get_workout_analysis_advice, 
 from app.services.prompt_service import get_prompts_from_notion
 from app.services.telegram_service import send_telegram_report, send_error_alert, send_progress_update
 from app.services.weather_service import WeatherService
+from app.services.redis_service import redis_service
 
 # --- CẤU HÌNH CHUNG ---
 from app.config import Config
@@ -84,13 +85,31 @@ async def handle_daily_or_sleep(user_config, mode, prompts):
     password = user_config.get('password')
     tele_id = user_config.get('telegram_chat_id')
 
-    if not email or not password: 
+    if not email or not password:
         print(f"[{name}] ❌ Thiếu Email/Pass, bỏ qua.")
         return
 
+    # --- RATE LIMITER & DEDUPLICATION ---
+    today = date.today()
+    date_iso = today.isoformat()
+
+    if tele_id:
+        if redis_service.is_rate_limited(tele_id, mode):
+            msg = "⚠️ Bạn đã yêu cầu quá nhanh. Vui lòng thử lại sau 10 phút."
+            print(f"[{name}] {msg}")
+            await send_telegram_report(TELE_TOKEN, msg, tele_id, name, None)
+            return
+
+        if not redis_service.check_and_set_dedup(tele_id, date_iso, mode):
+            msg = f"⛔ Báo cáo {mode} của bạn đã được gửi trong 1 giờ qua. Vui lòng đợi 1 tiếng giữa các yêu cầu."
+            print(f"[{name}] {msg}")
+            await send_telegram_report(TELE_TOKEN, msg, tele_id, name, None)
+            return
+    # ------------------------------------
+
     try:
         client = login_garmin(email, password, name)
-        
+
         # --- FRESHNESS CHECK ---
         is_fresh, fresh_msg = check_garmin_sync_status(client, max_age_hours=1.0, user_label=name)
         if not is_fresh:
@@ -98,6 +117,7 @@ async def handle_daily_or_sleep(user_config, mode, prompts):
             if tele_id:
                 # Gửi cảnh báo Telegram
                 await send_telegram_report(TELE_TOKEN, f"⛔ {fresh_msg}", tele_id, name, None)
+                redis_service.delete_dedup(tele_id, date_iso, mode)
             return
         # -----------------------
 
@@ -148,6 +168,8 @@ async def handle_daily_or_sleep(user_config, mode, prompts):
             
     except Exception as e:
         print(f"[{name}] ❌ Lỗi xử lý ({mode}): {e}")
+        if tele_id:
+            redis_service.delete_dedup(tele_id, date_iso, mode)
 
 async def handle_workout_analysis(user_config, prompts):
     """
@@ -162,10 +184,29 @@ async def handle_workout_analysis(user_config, prompts):
         print(f"[{name}] ❌ Thiếu Email/Pass, bỏ qua.")
         return
 
+    # --- RATE LIMITER & DEDUPLICATION ---
+    today = date.today()
+    date_iso = today.isoformat()
+    mode = "workout"
+
+    if tele_id:
+        if redis_service.is_rate_limited(tele_id, mode):
+            msg = "⚠️ Bạn đã yêu cầu quá nhanh. Vui lòng thử lại sau 10 phút."
+            print(f"[{name}] {msg}")
+            await send_telegram_report(TELE_TOKEN, msg, tele_id, name, None)
+            return
+
+        if not redis_service.check_and_set_dedup(tele_id, date_iso, mode):
+            msg = f"⛔ Báo cáo {mode} của bạn đã được gửi trong 1 giờ qua. Vui lòng đợi 1 tiếng giữa các yêu cầu."
+            print(f"[{name}] {msg}")
+            await send_telegram_report(TELE_TOKEN, msg, tele_id, name, None)
+            return
+    # ------------------------------------
+
     try:
         # 1. Login Garmin
         client = login_garmin(email, password, name)
-        
+
         # --- FRESHNESS CHECK ---
         is_fresh, fresh_msg = check_garmin_sync_status(client, max_age_hours=1.0, user_label=name)
         if not is_fresh:
@@ -173,19 +214,21 @@ async def handle_workout_analysis(user_config, prompts):
             if tele_id:
                 # Gửi cảnh báo Telegram
                 await send_telegram_report(TELE_TOKEN, f"⛔ {fresh_msg}", tele_id, name, None)
+                redis_service.delete_dedup(tele_id, date_iso, mode)
             return
         # -----------------------
 
         today = date.today()
-        
+
         # 2. Lấy dữ liệu bài tập 24h qua
         activities = fetch_daily_activities_detailed(client, today, name)
-        
+
         if not activities:
             msg = "Hôm nay bạn không có hoạt động nào để phân tích."
             print(f"[{name}] ⚠️ {msg}")
             if tele_id:
                 await send_telegram_report(TELE_TOKEN, f"⚠️ {msg}", tele_id, name, None)
+                redis_service.delete_dedup(tele_id, date_iso, mode)
             return
 
         if tele_id:
@@ -235,6 +278,8 @@ async def handle_workout_analysis(user_config, prompts):
 
     except Exception as e:
         print(f"[{name}] ❌ Lỗi xử lý Workout: {e}")
+        if tele_id:
+            redis_service.delete_dedup(tele_id, date_iso, mode)
 
 async def handle_battery_analysis(user_config, prompts):
     """
@@ -249,6 +294,25 @@ async def handle_battery_analysis(user_config, prompts):
         print(f"[{name}] ❌ Thiếu Email/Pass, bỏ qua.")
         return
 
+    # --- RATE LIMITER & DEDUPLICATION ---
+    today = date.today()
+    date_iso = today.isoformat()
+    mode = "battery"
+
+    if tele_id:
+        if redis_service.is_rate_limited(tele_id, mode):
+            msg = "⚠️ Bạn đã yêu cầu quá nhanh. Vui lòng thử lại sau 10 phút."
+            print(f"[{name}] {msg}")
+            await send_telegram_report(TELE_TOKEN, msg, tele_id, name, None)
+            return
+
+        if not redis_service.check_and_set_dedup(tele_id, date_iso, mode):
+            msg = f"⛔ Báo cáo {mode} của bạn đã được gửi trong 1 giờ qua. Vui lòng đợi 1 tiếng giữa các yêu cầu."
+            print(f"[{name}] {msg}")
+            await send_telegram_report(TELE_TOKEN, msg, tele_id, name, None)
+            return
+    # ------------------------------------
+
     try:
         client = login_garmin(email, password, name)
 
@@ -258,6 +322,7 @@ async def handle_battery_analysis(user_config, prompts):
             print(f"[{name}] ⛔ {fresh_msg}")
             if tele_id:
                 await send_telegram_report(TELE_TOKEN, f"⛔ {fresh_msg}", tele_id, name, None)
+                redis_service.delete_dedup(tele_id, date_iso, mode)
             return
         # -----------------------
 
@@ -310,6 +375,8 @@ async def handle_battery_analysis(user_config, prompts):
 
     except Exception as e:
         print(f"[{name}] ❌ Lỗi xử lý Battery Analysis: {e}")
+        if tele_id:
+            redis_service.delete_dedup(tele_id, date_iso, mode)
 
 async def main():
     parser = argparse.ArgumentParser(description="Garmin AI Coach Pro")

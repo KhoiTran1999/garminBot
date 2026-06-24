@@ -11,13 +11,14 @@ class Config:
     NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
     NOTION_PROMPT_DATABASE_ID = os.getenv("NOTION_PROMPT_DATABASE_ID")
     TELEGRAM_ADMIN_ID = os.getenv("TELEGRAM_ADMIN_ID")
+    REDIS_URL = os.getenv("REDIS_URL")
 
     # Load 9Router Key (không fallback về GEMINI_API_KEY)
     ROUTER9_API_KEY = os.getenv("ROUTER9_API_KEY")
     ROUTER9_COMBOS_MODEL = os.getenv("ROUTER9_COMBOS_MODEL")
 
     if not ROUTER9_API_KEY:
-        print("⚠️ CẢNH BÁO: Không tìm thấy ROUTER9_API_KEY nào trong .env! Báo cáo AI sẽ không hoạt động.")
+        print("WARNING: ROUTER9_API_KEY not found in .env! AI report will not work.")
 
     # Load danh sách Gemini Keys (dành cho TTS)
     GEMINI_API_KEYS = []
@@ -35,4 +36,4 @@ class Config:
             break
 
     if not GEMINI_API_KEYS:
-        print("⚠️ CẢNH BÁO: Không tìm thấy GEMINI_API_KEY nào trong .env! Tính năng TTS sẽ không hoạt động.")
+        print("WARNING: GEMINI_API_KEY not found in .env! TTS features will not work.")

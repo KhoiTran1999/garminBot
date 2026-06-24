@@ -8,6 +8,7 @@ from typing import Optional, Dict
 from google import genai
 from google.genai import types
 from app.config import Config
+from app.services.redis_service import redis_service
 
 class GeminiKeyManager:
     """
@@ -20,7 +21,7 @@ class GeminiKeyManager:
 
     def _load_keys(self):
         self.keys = Config.GEMINI_API_KEYS
-        print(f"🔑 Loaded {len(self.keys)} Gemini Keys from Config.")
+        print(f"Loaded {len(self.keys)} Gemini Keys from Config.")
 
     def get_current_key(self):
         if not self.keys:
@@ -39,7 +40,7 @@ class GeminiKeyManager:
     def execute_with_retry(self, worker_func, default_return=None, verbose_label="Service"):
         max_attempts = self.get_key_count() * 2
         if max_attempts == 0:
-            print(f"[{verbose_label}] ⚠️ Không có API Key nào để thực thi.")
+            print(f"[{verbose_label}] Warning: No API Keys available to execute.")
             return default_return
 
         for attempt in range(max_attempts):
@@ -51,7 +52,7 @@ class GeminiKeyManager:
 
             except Exception as e:
                 error_msg = str(e)
-                print(f"[{verbose_label}] ⚠️ Lỗi AI (Key ...{current_api_key[-5:] if current_api_key else 'None'}): {error_msg}")
+                print(f"[{verbose_label}] Error (Key ...{current_api_key[-5:] if current_api_key else 'None'}): {error_msg}")
 
                 if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "quota" in error_msg.lower():
                     self.rotate_key()
@@ -92,11 +93,21 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
     """
     # Lấy thông tin cá nhân hóa từ Notion
     user_label = user_config.get('name', 'VĐV')
+    email = user_config.get('email')
     goal = user_config.get('goal', 'Duy trì sức khỏe')
     injury = user_config.get('injury', 'Không có')
     note = user_config.get('note', '')
 
-    print(f"[{user_label}] 🧠 Đang gọi AI Coach (Mode: {mode} | Context: {goal})...")
+    # Fetch recent AI reports for context
+    recent_reports = redis_service.get_ai_context(email, mode)
+    context_str = ""
+    if recent_reports:
+        context_str = "\n\n*** 📝 LỊCH SỬ BÁO CÁO CỦA CÁC NGÀY TRƯỚC (Dùng tham khảo xu hướng) ***\n"
+        for idx, rep in enumerate(recent_reports, 1):
+            context_str += f"\n-- Báo cáo {idx} --\n{rep}\n"
+        context_str += "\n*****************************************************************\n"
+
+    print(f"[{user_label}] Calling AI Coach (Mode: {mode} | Context: {goal})...")
     
     # Chuẩn bị Prompt
     activities_text = "\n".join(l_data['raw_activities_for_ai']) if l_data['raw_activities_for_ai'] else "Không có hoạt động đáng kể."
@@ -172,7 +183,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
             formatted_prompt = f"{sys_p}\n\n{formatted_user_part}"
 
         except Exception as e:
-            print(f"[{user_label}] ⚠️ Error formatting Notion prompt ({mode}): {e}")
+            print(f"[{user_label}] Error formatting Notion prompt ({mode}): {e}")
             formatted_prompt = None
     elif prompt_template and isinstance(prompt_template, str):
          # Old behavior / Fallback if string passed
@@ -186,7 +197,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
                 r_score=r_score,
                 r_data=r_data,
                 l_data=l_data,
-                avg_daily_load_int=avg_daily_load_int, 
+                avg_daily_load_int=avg_daily_load_int,
                 activities_text=activities_text,
                 nap_text=nap_text,
                 spo2_text=spo2_text,
@@ -197,7 +208,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
                 aqi_info=aqi_text
             )
          except Exception as e:
-            print(f"[{user_label}] ⚠️ Error formatting Notion string prompt ({mode}): {e}")
+            print(f"[{user_label}] Error formatting Notion string prompt ({mode}): {e}")
             formatted_prompt = None
 
     if formatted_prompt:
@@ -292,15 +303,22 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
         LƯU Ý: Chỉ dùng dấu * để bold text cho text và *** để bold text cho title, dùng dấu • cho danh sách.
         """
 
+    # Append AI context to prompt
+    if context_str:
+        prompt += context_str
+
     # --- GỌI API TRỰC TIẾP (Không Retry Key) ---
     try:
         if Config.ROUTER9_API_KEY:
-            return call_ai_api(Config.ROUTER9_API_KEY, model_to_use, prompt)
+            ai_report = call_ai_api(Config.ROUTER9_API_KEY, model_to_use, prompt)
+            if ai_report and email:
+                redis_service.save_ai_context(email, mode, ai_report)
+            return ai_report
         else:
-             print(f"[{user_label}] ⚠️ Không có ROUTER9_API_KEY.")
+             print(f"[{user_label}] ROUTER9_API_KEY not found.")
              return "AI Coach chưa được cấu hình ROUTER9_API_KEY."
     except Exception as e:
-        print(f"[{user_label}] ⚠️ Lỗi AI: {str(e)}")
+        print(f"[{user_label}] AI Error: {str(e)}")
         return "AI Coach đang bận hoặc gặp lỗi. Vui lòng thử lại sau."
 
 def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None, aqi_data=None):
@@ -308,9 +326,20 @@ def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None
     Gọi AI để phân tích năng lượng (Body Battery & Stress) trong ngày.
     """
     user_label = user_config.get('name', 'VĐV')
+    email = user_config.get('email')
     goal = user_config.get('goal', 'Duy trì sức khỏe')
 
-    print(f"[{user_label}] 🧠 Đang gọi AI Coach (Mode: battery)...")
+    print(f"[{user_label}] Calling AI Coach (Mode: battery)...")
+
+    # Fetch recent AI reports for context
+    mode = "battery"
+    recent_reports = redis_service.get_ai_context(email, mode)
+    context_str = ""
+    if recent_reports:
+        context_str = "\n\n*** 📝 LỊCH SỬ BÁO CÁO CỦA CÁC NGÀY TRƯỚC (Dùng tham khảo xu hướng) ***\n"
+        for idx, rep in enumerate(recent_reports, 1):
+            context_str += f"\n-- Báo cáo {idx} --\n{rep}\n"
+        context_str += "\n*****************************************************************\n"
 
     vn_timezone = pytz.timezone('Asia/Ho_Chi_Minh')
     current_now = datetime.now(vn_timezone).strftime("%H:%M:%S, %d/%m/%Y")
@@ -344,7 +373,7 @@ def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None
             )
             formatted_prompt = f"{sys_p}\n\n{formatted_user_part}"
         except Exception as e:
-            print(f"[{user_label}] ⚠️ Error formatting Notion prompt (battery): {e}")
+            print(f"[{user_label}] Error formatting Notion prompt (battery): {e}")
             formatted_prompt = None
     elif prompt_template and isinstance(prompt_template, str):
          try:
@@ -358,7 +387,7 @@ def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None
                 aqi_info=aqi_text
             )
          except Exception as e:
-            print(f"[{user_label}] ⚠️ Error formatting Notion string prompt (battery): {e}")
+            print(f"[{user_label}] Error formatting Notion string prompt (battery): {e}")
             formatted_prompt = None
 
     if formatted_prompt:
@@ -394,26 +423,44 @@ def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None
         LƯU Ý: Chỉ dùng dấu * để bold text cho text và *** để bold text cho title, dùng dấu • cho danh sách.
         """
 
+    # Append AI context to prompt
+    if context_str:
+        prompt += context_str
+
     try:
         if Config.ROUTER9_API_KEY:
-            return call_ai_api(Config.ROUTER9_API_KEY, model_to_use, prompt)
+            ai_report = call_ai_api(Config.ROUTER9_API_KEY, model_to_use, prompt)
+            if ai_report and email:
+                redis_service.save_ai_context(email, mode, ai_report)
+            return ai_report
         else:
-             print(f"[{user_label}] ⚠️ Không có ROUTER9_API_KEY.")
+             print(f"[{user_label}] ROUTER9_API_KEY not found.")
              return "AI Coach chưa được cấu hình ROUTER9_API_KEY."
     except Exception as e:
-        print(f"[{user_label}] ⚠️ Lỗi AI: {str(e)}")
+        print(f"[{user_label}] AI Error: {str(e)}")
         return "AI Coach đang bận hoặc gặp lỗi. Vui lòng thử lại sau."
 def get_workout_analysis_advice(activity_data_list, user_config, prompt_template=None, aqi_data=None):
     """
     Phân tích chi tiết (Time-series) các bài tập trong 24h.
     """
     user_label = user_config.get('name', 'VĐV')
+    email = user_config.get('email')
     goal = user_config.get('goal', 'Cải thiện thành tích')
-    
-    print(f"[{user_label}] 🧠 Đang phân tích chi tiết bài tập...")
-    
+
+    print(f"[{user_label}] Analyzing workout details...")
+
     if not activity_data_list:
         return None
+
+    # Fetch recent AI reports for context
+    mode = "workout"
+    recent_reports = redis_service.get_ai_context(email, mode)
+    context_str = ""
+    if recent_reports:
+        context_str = "\n\n*** 📝 LỊCH SỬ BÁO CÁO CỦA CÁC NGÀY TRƯỚC (Dùng tham khảo xu hướng) ***\n"
+        for idx, rep in enumerate(recent_reports, 1):
+            context_str += f"\n-- Báo cáo {idx} --\n{rep}\n"
+        context_str += "\n*****************************************************************\n"
 
     # Serialization
     import json
@@ -446,7 +493,7 @@ def get_workout_analysis_advice(activity_data_list, user_config, prompt_template
             )
             formatted_prompt = f"{sys_p}\n\n{formatted_user}"
         except Exception as e:
-             print(f"[{user_label}] ⚠️ Error formatting Notion workout prompt (dict): {e}")
+             print(f"[{user_label}] Error formatting Notion workout prompt (dict): {e}")
              formatted_prompt = None
 
     elif prompt_template and isinstance(prompt_template, str):
@@ -459,7 +506,7 @@ def get_workout_analysis_advice(activity_data_list, user_config, prompt_template
                 aqi_info=aqi_text
             )
         except Exception as e:
-            print(f"[{user_label}] ⚠️ Error formatting Notion workout prompt: {e}")
+            print(f"[{user_label}] Error formatting Notion workout prompt: {e}")
             formatted_prompt = None
 
     if formatted_prompt:
@@ -508,14 +555,21 @@ def get_workout_analysis_advice(activity_data_list, user_config, prompt_template
         LƯU Ý: Chỉ dùng dấu * để bold text cho text và *** để bold text cho title, dùng dấu • cho danh sách.
         """
 
+    # Append AI context to prompt
+    if context_str:
+        prompt += context_str
+
     try:
         if Config.ROUTER9_API_KEY:
-            return call_ai_api(Config.ROUTER9_API_KEY, model_to_use, prompt)
+            ai_report = call_ai_api(Config.ROUTER9_API_KEY, model_to_use, prompt)
+            if ai_report and email:
+                redis_service.save_ai_context(email, mode, ai_report)
+            return ai_report
         else:
-             print(f"[{user_label}] ⚠️ Không có ROUTER9_API_KEY.")
+             print(f"[{user_label}] ROUTER9_API_KEY not found.")
              return None
     except Exception as e:
-        print(f"[{user_label}] ⚠️ Lỗi AI: {str(e)}")
+        print(f"[{user_label}] AI Error: {str(e)}")
         return None
 
 def get_speech_script(original_text, user_config, prompt_template=None, mode="daily"):
@@ -523,7 +577,7 @@ def get_speech_script(original_text, user_config, prompt_template=None, mode="da
     Dùng Gemini để viết lại nội dung báo cáo thành kịch bản nói tự nhiên.
     """
     user_label = user_config.get('name', 'Bạn')
-    print(f"[{user_label}] 🗣️ Đang viết kịch bản Voice...")
+    print(f"[{user_label}] Writing Voice script...")
     
     context_str = "báo cáo thể thao" if mode == "daily" else "phân tích năng lượng cơ thể" if mode == "battery" else "phân tích giấc ngủ sáng nay"
     
@@ -545,7 +599,7 @@ def get_speech_script(original_text, user_config, prompt_template=None, mode="da
              )
              formatted_prompt = f"{sys_p}\n\n{formatted_user}"
         except Exception as e:
-            print(f"[{user_label}] ⚠️ Error formatting Notion voice prompt (dict): {e}")
+            print(f"[{user_label}] Error formatting Notion voice prompt (dict): {e}")
             formatted_prompt = None
 
     elif prompt_template and isinstance(prompt_template, str):
@@ -556,7 +610,7 @@ def get_speech_script(original_text, user_config, prompt_template=None, mode="da
                 original_text=original_text
             )
         except Exception as e:
-            print(f"[{user_label}] ⚠️ Error formatting Notion voice prompt: {e}")
+            print(f"[{user_label}] Error formatting Notion voice prompt: {e}")
             formatted_prompt = None
 
     if formatted_prompt:
@@ -567,7 +621,7 @@ def get_speech_script(original_text, user_config, prompt_template=None, mode="da
         Dưới đây là một {context_str} của họ:
         ---
         {original_text}
-        ---        
+        ---
         Nhiệm vụ: Viết lại thành **KỊCH BẢN ĐỌC (Voice Script)** ngắn gọn, tự nhiên, bỏ emoji, bỏ markdown. Giọng điệu: Hào hứng, năng động, ấm áp, như một người bạn đồng hành.
         """
 
@@ -575,10 +629,10 @@ def get_speech_script(original_text, user_config, prompt_template=None, mode="da
         if Config.ROUTER9_API_KEY:
             return call_ai_api(Config.ROUTER9_API_KEY, model_to_use, prompt).strip()
         else:
-             print(f"[{user_label}] ⚠️ Không có ROUTER9_API_KEY.")
+             print(f"[{user_label}] ROUTER9_API_KEY not found.")
              return "Xin chào, đây là báo cáo sức khỏe của bạn. Hãy kiểm tra tin nhắn văn bản để biết chi tiết."
     except Exception as e:
-        print(f"[{user_label}] ⚠️ Lỗi AI: {str(e)}")
+        print(f"[{user_label}] AI Error: {str(e)}")
         return "Xin chào, đây là báo cáo sức khỏe của bạn. Hãy kiểm tra tin nhắn văn bản để biết chi tiết."
 
 def parse_audio_mime_type(mime_type: str) -> Dict[str, Optional[int]]:
@@ -624,7 +678,7 @@ async def generate_audio_from_text(text, output_file, voice="Sadachbia"):
     """
     Tạo file WAV dùng Gemini TTS.
     """
-    print(f"🗣️ Đang tạo voice bằng Gemini ({voice})...")
+    print(f"Generating voice with Gemini ({voice})...")
         
     generate_content_config = types.GenerateContentConfig(
         temperature=1,
@@ -680,7 +734,7 @@ async def generate_audio_from_text(text, output_file, voice="Sadachbia"):
             # Write file
             with open(final_output_file, "wb") as f:
                 f.write(wav_data)
-            print(f"✅ Audio saved to {final_output_file}")
+            print(f"Audio saved to {final_output_file}")
             return True
         else:
              raise Exception("Stream finished but no audio data collected.")
