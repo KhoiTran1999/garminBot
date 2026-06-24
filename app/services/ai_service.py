@@ -748,18 +748,69 @@ async def generate_audio_from_text(text, output_file, voice="Sadachbia"):
         verbose_label="Gemini TTS"
     )
 
+def filter_time_series(values_list, start_time=None, end_time=None, downsample_factor=5):
+    """
+    Lọc danh sách time-series [[ts_ms, val], ...] theo khung giờ HH:MM và giảm tải số lượng điểm dữ liệu.
+    """
+    import pytz
+    from datetime import datetime
+
+    if not values_list:
+        return []
+
+    start_min = None
+    end_min = None
+    if start_time:
+        try:
+            parts = start_time.split(":")
+            start_min = int(parts[0]) * 60 + int(parts[1])
+        except Exception: pass
+    if end_time:
+        try:
+            parts = end_time.split(":")
+            end_min = int(parts[0]) * 60 + int(parts[1])
+        except Exception: pass
+
+    vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+    filtered = []
+
+    for item in values_list:
+        if not isinstance(item, list) and not isinstance(item, tuple):
+            continue
+        if len(item) < 2:
+            continue
+        ts_ms, val = item[0], item[1]
+        if val is None or val < 0:
+            continue
+
+        dt = datetime.fromtimestamp(ts_ms / 1000, vn_tz)
+        time_str = dt.strftime("%H:%M")
+        item_min = dt.hour * 60 + dt.minute
+
+        if start_min is not None and item_min < start_min:
+            continue
+        if end_min is not None and item_min > end_min:
+            continue
+
+        filtered.append({"time": time_str, "value": val})
+
+    if not start_time and not end_time and len(filtered) > 100:
+        filtered = filtered[::downsample_factor]
+
+    return filtered
+
 GARMIN_TOOLS = [
     {
         "type": "function",
         "function": {
             "name": "get_health_summary",
-            "description": "Lấy dữ liệu sức khỏe tổng quan trong ngày (Nhịp tim nghỉ RHR, bước chân, mức stress trung bình, body battery).",
+            "description": "Lấy dữ liệu sức khỏe tổng quan trong một ngày cụ thể. Dữ liệu trả về bao gồm nhịp tim nghỉ ngơi (resting heart rate - RHR), tổng số bước chân, mức độ căng thẳng trung bình (average stress), và pin cơ thể hiện tại (body battery). Sử dụng công cụ này khi người dùng hỏi các chỉ số cơ bản của ngày.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "date": {
                         "type": "string",
-                        "description": "Ngày cần lấy dữ liệu định dạng YYYY-MM-DD (Ví dụ: 2026-06-24)."
+                        "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD (Ví dụ: 2026-06-24)."
                     }
                 },
                 "required": ["date"]
@@ -770,13 +821,13 @@ GARMIN_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_sleep_analysis",
-            "description": "Lấy phân tích giấc ngủ chi tiết (thời gian ngủ sâu, ngủ nông, ngủ REM, thời gian thức, đánh giá giấc ngủ).",
+            "description": "Phân tích chi tiết giấc ngủ đêm qua hoặc trong một ngày cụ thể. Dữ liệu trả về bao gồm phân phối thời gian ngủ sâu (Deep sleep), ngủ nông (Light sleep), ngủ mơ (REM sleep), thời gian thức giấc (Awake), tổng thời gian ngủ thực tế, và đánh giá chất lượng giấc ngủ. Sử dụng khi người dùng hỏi về giấc ngủ.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "date": {
                         "type": "string",
-                        "description": "Ngày cần lấy dữ liệu định dạng YYYY-MM-DD. Lưu ý: Ngày của giấc ngủ là ngày thức dậy (Ví dụ: ngủ đêm 23/06 thức dậy sáng 24/06 thì truyền ngày 2026-06-24)."
+                        "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD. Lưu ý: Ngày của giấc ngủ là ngày thức dậy (Ví dụ: ngủ đêm 23/06 thức dậy sáng 24/06 thì truyền ngày 2026-06-24)."
                     }
                 },
                 "required": ["date"]
@@ -787,13 +838,21 @@ GARMIN_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_stress_trend",
-            "description": "Lấy dữ liệu mức căng thẳng (Stress) chi tiết trong ngày.",
+            "description": "Lấy dữ liệu mức căng thẳng (Stress) chi tiết trong ngày. Hỗ trợ lọc theo khoảng thời gian cụ thể (ví dụ: nhịp stress lúc 14:00 - 16:00) bằng tham số start_time và end_time. Sử dụng khi người dùng hỏi về biến động stress, stress buổi sáng/chiều hoặc stress tại một khung giờ cụ thể.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "date": {
                         "type": "string",
-                        "description": "Ngày cần lấy dữ liệu định dạng YYYY-MM-DD."
+                        "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
+                    },
+                    "start_time": {
+                        "type": "string",
+                        "description": "Giờ bắt đầu cần lọc, định dạng HH:MM (Ví dụ: 07:00). Mặc định là None (không lọc)."
+                    },
+                    "end_time": {
+                        "type": "string",
+                        "description": "Giờ kết thúc cần lọc, định dạng HH:MM (Ví dụ: 08:30). Mặc định là None (không lọc)."
                     }
                 },
                 "required": ["date"]
@@ -804,13 +863,21 @@ GARMIN_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_body_battery_trend",
-            "description": "Lấy dữ liệu Pin cơ thể (Body Battery) và các giấc ngủ ngắn (naps) trong ngày.",
+            "description": "Lấy dữ liệu Pin cơ thể (Body Battery) biến động trong ngày và thông tin các giấc ngủ ngắn (naps) nếu có. Hỗ trợ lọc theo khoảng thời gian cụ thể bằng tham số start_time và end_time. Sử dụng khi người dùng hỏi về biến động sạc/xả pin cơ thể, pin cơ thể buổi sáng/tối hoặc ngủ trưa.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "date": {
                         "type": "string",
-                        "description": "Ngày cần lấy dữ liệu định dạng YYYY-MM-DD."
+                        "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
+                    },
+                    "start_time": {
+                        "type": "string",
+                        "description": "Giờ bắt đầu cần lọc, định dạng HH:MM (Ví dụ: 07:00)."
+                    },
+                    "end_time": {
+                        "type": "string",
+                        "description": "Giờ kết thúc cần lọc, định dạng HH:MM (Ví dụ: 12:00)."
                     }
                 },
                 "required": ["date"]
@@ -821,17 +888,17 @@ GARMIN_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_activities",
-            "description": "Lấy danh sách các hoạt động thể thao (chạy bộ, đạp xe, bơi lội, gym...) trong khoảng thời gian xác định.",
+            "description": "Lấy danh sách các hoạt động thể thao (chạy bộ, đạp xe, bơi lội, gym...) trong khoảng thời gian xác định. Trả về ID hoạt động, tên, loại hoạt động, thời gian bắt đầu, quãng đường (km), thời gian tập (phút), nhịp tim trung bình, nhịp tim tối đa, calo tiêu hao. Sử dụng khi người dùng hỏi hôm nay/tuần này tập gì, chạy bao nhiêu km.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "start_date": {
                         "type": "string",
-                        "description": "Ngày bắt đầu định dạng YYYY-MM-DD."
+                        "description": "Ngày bắt đầu tìm kiếm, định dạng YYYY-MM-DD."
                     },
                     "end_date": {
                         "type": "string",
-                        "description": "Ngày kết thúc định dạng YYYY-MM-DD. Nếu không truyền, mặc định bằng start_date."
+                        "description": "Ngày kết thúc tìm kiếm, định dạng YYYY-MM-DD. Nếu để trống sẽ mặc định bằng start_date."
                     }
                 },
                 "required": ["start_date"]
@@ -842,13 +909,13 @@ GARMIN_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_activity_details",
-            "description": "Lấy chi tiết một bài tập cụ thể bao gồm splits, nhịp tim theo vùng (HR zones), thời tiết, và biểu đồ chi tiết.",
+            "description": "Lấy chi tiết một bài tập cụ thể bằng ID bài tập (activity_id). Dữ liệu trả về bao gồm splits (tốc độ/pace theo từng km), thời tiết khi tập, nhịp tim theo vùng (HR zones), và biểu đồ thời gian thực. Sử dụng khi người dùng hỏi sâu về phân tích kỹ thuật của một hoạt động thể thao cụ thể.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "activity_id": {
                         "type": "integer",
-                        "description": "ID của hoạt động thể thao."
+                        "description": "ID bài tập (activityId) lấy từ danh sách hoạt động."
                     }
                 },
                 "required": ["activity_id"]
@@ -859,13 +926,13 @@ GARMIN_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_hrv_data",
-            "description": "Lấy dữ liệu biến thiên nhịp tim HRV (Heart Rate Variability) đêm qua hoặc ngày cụ thể.",
+            "description": "Lấy dữ liệu biến thiên nhịp tim HRV (Heart Rate Variability) đêm qua hoặc ngày cụ thể. Dữ liệu bao gồm trạng thái HRV (HRV Status: Balanced, Unbalanced...), trị số HRV trung bình đêm qua (lastNightAvg), trung bình tuần (weeklyAvg), và khoảng tham chiếu (baseline). Sử dụng khi người dùng hỏi về HRV hoặc mức độ phục hồi hệ thần kinh tự chủ.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "date": {
                         "type": "string",
-                        "description": "Ngày cần lấy dữ liệu định dạng YYYY-MM-DD."
+                        "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
                     }
                 },
                 "required": ["date"]
@@ -876,13 +943,13 @@ GARMIN_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_spo2_data",
-            "description": "Lấy dữ liệu nồng độ oxy trong máu SpO2 trung bình, thấp nhất trong ngày.",
+            "description": "Lấy dữ liệu nồng độ oxy trong máu SpO2 trung bình, thấp nhất và đo gần nhất trong ngày. Sử dụng khi người dùng hỏi về SpO2 hoặc nồng độ oxy khi ngủ.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "date": {
                         "type": "string",
-                        "description": "Ngày cần lấy dữ liệu định dạng YYYY-MM-DD."
+                        "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
                     }
                 },
                 "required": ["date"]
@@ -893,13 +960,13 @@ GARMIN_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_respiration_data",
-            "description": "Lấy dữ liệu nhịp thở (Respiration) trung bình khi thức, khi ngủ trong ngày.",
+            "description": "Lấy dữ liệu nhịp thở (Respiration/Breathing Rate) trung bình khi thức, khi ngủ, thấp nhất và cao nhất trong ngày. Đơn vị đo là breaths per minute (brpm). Sử dụng khi người dùng hỏi về nhịp thở.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "date": {
                         "type": "string",
-                        "description": "Ngày cần lấy dữ liệu định dạng YYYY-MM-DD."
+                        "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
                     }
                 },
                 "required": ["date"]
@@ -910,13 +977,13 @@ GARMIN_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_training_readiness",
-            "description": "Lấy điểm sẵn sàng tập luyện (Training Readiness) và các yếu tố ảnh hưởng (thời gian phục hồi, lịch sử giấc ngủ, HRV, stress, lịch sử tập luyện).",
+            "description": "Lấy điểm sẵn sàng tập luyện (Training Readiness) từ 1-100 và đánh giá (Poor, Good, Prime...). Trả về chi tiết các yếu tố cấu thành: thời gian phục hồi còn lại (recoveryTimeHours), chất lượng giấc ngủ (sleepHistoryScore), trạng thái HRV, lịch sử stress, và lịch sử tập luyện. Sử dụng khi người dùng hỏi 'Hôm nay mình có nên tập nặng không?' hoặc hỏi về độ sẵn sàng tập luyện.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "date": {
                         "type": "string",
-                        "description": "Ngày cần lấy dữ liệu định dạng YYYY-MM-DD."
+                        "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
                     }
                 },
                 "required": ["date"]
@@ -927,16 +994,236 @@ GARMIN_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_training_status",
-            "description": "Lấy trạng thái tập luyện hiện tại (Training Status), VO2 Max, Tải tập luyện 7 ngày qua.",
+            "description": "Lấy trạng thái tập luyện hiện tại (Training Status) ví dụ: Productive (Hiệu quả), Peaking (Đạt đỉnh), Maintaining (Duy trì), Detraining (Ngừng tập). Cung cấp thông tin về chỉ số VO2 Max, trạng thái thể lực (fitnessStatus), tải tập luyện hiện tại (loadStatus), và tải tập luyện 7 ngày qua (sevenDayAcuteLoad). Sử dụng khi người dùng hỏi về VO2 Max, tải tập luyện hoặc trạng thái huấn luyện dài hạn.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "date": {
                         "type": "string",
-                        "description": "Ngày cần lấy dữ liệu định dạng YYYY-MM-DD."
+                        "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
                     }
                 },
                 "required": ["date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_heart_rates",
+            "description": "Lấy dữ liệu nhịp tim chi tiết (time-series) theo từng mốc thời gian trong ngày. Hỗ trợ lọc theo giờ cụ thể bằng start_time và end_time. Sử dụng khi người dùng hỏi các câu hỏi cụ thể như: 'Nhịp tim của mình lúc 7h sáng đến 8h sáng là bao nhiêu?' hoặc 'Nhịp tim lúc chạy bộ chiều nay biến động thế nào?'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
+                    },
+                    "start_time": {
+                        "type": "string",
+                        "description": "Giờ bắt đầu cần lọc, định dạng HH:MM (Ví dụ: 07:00)."
+                    },
+                    "end_time": {
+                        "type": "string",
+                        "description": "Giờ kết thúc cần lọc, định dạng HH:MM (Ví dụ: 08:00)."
+                    }
+                },
+                "required": ["date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_steps_trend",
+            "description": "Lấy dữ liệu bước chân chi tiết (time-series) theo từng khoảng thời gian trong ngày. Hỗ trợ lọc theo giờ cụ thể bằng start_time và end_time. Sử dụng khi người dùng hỏi chi tiết như: 'Khung giờ nào mình đi bộ nhiều nhất?' hoặc 'Từ 8h đến 10h sáng mình đi được bao nhiêu bước?'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
+                    },
+                    "start_time": {
+                        "type": "string",
+                        "description": "Giờ bắt đầu lọc, định dạng HH:MM (Ví dụ: 08:00)."
+                    },
+                    "end_time": {
+                        "type": "string",
+                        "description": "Giờ kết thúc lọc, định dạng HH:MM (Ví dụ: 10:00)."
+                    }
+                },
+                "required": ["date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_hydration_data",
+            "description": "Lấy dữ liệu theo dõi lượng nước uống (Hydration) trong ngày, lượng nước mục tiêu (ml) và lượng mồ hôi thất thoát ước tính khi tập luyện. Sử dụng khi người dùng hỏi hôm nay đã uống bao nhiêu nước, cần uống thêm bao nhiêu.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
+                    }
+                },
+                "required": ["date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_max_metrics",
+            "description": "Lấy các chỉ số thể chất tối đa (Max metrics) bao gồm lịch sử VO2 Max chi tiết cho các môn thể thao (chạy bộ, đạp xe) và độ tuổi thể chất (Fitness Age). Sử dụng khi người dùng hỏi chi tiết về độ tuổi thể chất hoặc tiến trình VO2 Max.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
+                    }
+                },
+                "required": ["date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_lactate_threshold",
+            "description": "Lấy ngưỡng Lactate (Lactate Threshold) bao gồm nhịp tim ngưỡng (threshold HR - bpm) và tốc độ ngưỡng (threshold pace/speed - m/s) được đồng hồ Garmin ghi nhận tự động. Sử dụng khi người dùng hỏi về ngưỡng acid lactic hoặc các chỉ số nâng cao để lập giáo án chạy bộ.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
+                    }
+                },
+                "required": ["date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_personal_records",
+            "description": "Lấy danh sách kỷ lục cá nhân (Personal Records - PR) của người dùng ở các cự ly chạy bộ (1km, 5km, 10k, Half Marathon, Marathon, hoạt động xa nhất), bơi lội, đạp xe. Sử dụng khi người dùng hỏi 'Kỷ lục 5k của mình là bao nhiêu?' hoặc các câu hỏi tương tự.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_race_predictions",
+            "description": "Lấy dự báo thành tích thi đấu (Race Predictions) cho các cự ly chạy bộ phổ biến: 5km, 10km, Half Marathon (21km), và Marathon (42km) dựa trên dữ liệu VO2 Max và lịch sử tập luyện. Sử dụng khi người dùng hỏi dự báo thời gian hoàn thành cuộc đua hoặc khả năng chạy hiện tại.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "start_date": {
+                        "type": "string",
+                        "description": "Ngày bắt đầu lấy dự báo định dạng YYYY-MM-DD. Nếu trống sẽ mặc định là hôm nay."
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "description": "Ngày kết thúc định dạng YYYY-MM-DD."
+                    }
+                },
+                "required": ["start_date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_fitness_age",
+            "description": "Lấy thông tin chi tiết về độ tuổi thể chất (Fitness Age) của người dùng cùng với các khuyến nghị để cải thiện độ tuổi thể chất (ví dụ: giảm BMI, tăng thời gian vận động cường độ cao). Sử dụng khi người dùng hỏi về tuổi thể chất.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
+                    }
+                },
+                "required": ["date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_endurance_score",
+            "description": "Lấy điểm bền bỉ (Endurance Score) của Garmin đo khả năng duy trì vận động kéo dài của cơ thể và các yếu tố đóng góp từ các hoạt động trước đó. Sử dụng khi người dùng hỏi về điểm bền bỉ hoặc khả năng sức bền.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "start_date": {
+                        "type": "string",
+                        "description": "Ngày bắt đầu, định dạng YYYY-MM-DD."
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "description": "Ngày kết thúc, định dạng YYYY-MM-DD."
+                    }
+                },
+                "required": ["start_date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_hill_score",
+            "description": "Lấy điểm leo dốc (Hill Score) của Garmin đo khả năng chạy lên dốc dựa trên sức mạnh leo dốc (hill strength) và sức bền leo dốc (hill endurance). Sử dụng khi người dùng hỏi về điểm leo dốc hoặc khả năng chạy địa hình/dốc.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "start_date": {
+                        "type": "string",
+                        "description": "Ngày bắt đầu, định dạng YYYY-MM-DD."
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "description": "Ngày kết thúc, định dạng YYYY-MM-DD."
+                    }
+                },
+                "required": ["start_date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_intensity_minutes",
+            "description": "Lấy số phút vận động cường độ cao (Intensity Minutes) trong ngày bao gồm số phút cường độ trung bình (moderate), cường độ mạnh (vigorous) và tổng số phút tích lũy so với mục tiêu tuần. Sử dụng khi người dùng hỏi về thời gian vận động tích lũy trong ngày.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
+                    }
+                },
+                "required": ["date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_devices",
+            "description": "Lấy danh sách các thiết bị đồng hồ Garmin (Devices) của người dùng hiện đang kết nối với tài khoản, bao gồm tên thiết bị, mã model, số serial, phiên bản phần mềm. Sử dụng khi người dùng hỏi về thông tin đồng hồ đang sử dụng.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
             }
         }
     }
@@ -974,17 +1261,25 @@ def execute_garmin_tool(client, name: str, args: dict, user_label: str = "User")
             return json.dumps({"sleep_analysis": sleep_desc}, ensure_ascii=False)
 
         elif name == "get_stress_trend":
-            stress_data = client.get_stress_data(date_str) or {}
+            stress_data = client.get_all_day_stress(date_str) or {}
+            stress_values = stress_data.get("stressValuesArray") or []
+            filtered_stress = filter_time_series(stress_values, args.get("start_time"), args.get("end_time"), downsample_factor=5)
+
             avg_stress = stress_data.get('avgStress') or stress_data.get('averageStressLevel')
             stress_duration = stress_data.get('stressDuration')
             return json.dumps({
                 "average_stress": avg_stress,
                 "stress_duration_details": stress_duration,
-                "summary": {k: v for k, v in stress_data.items() if k not in ['stressValuesArray', 'bodyBatteryValuesArray']}
+                "stress_readings_count": len(filtered_stress),
+                "stress_readings": filtered_stress
             }, ensure_ascii=False)
 
         elif name == "get_body_battery_trend":
-            bb_data = client.get_body_battery(date_str) or []
+            # get_all_day_stress contains bodyBatteryValuesArray
+            stress_data = client.get_all_day_stress(date_str) or {}
+            bb_values = stress_data.get("bodyBatteryValuesArray") or []
+            filtered_bb = filter_time_series(bb_values, args.get("start_time"), args.get("end_time"), downsample_factor=5)
+
             events = client.get_body_battery_events(date_str) or []
             naps = [e for e in events if e.get('eventType') == 'NAP']
 
@@ -996,23 +1291,15 @@ def execute_garmin_tool(client, name: str, args: dict, user_label: str = "User")
                     "duration_minutes": int(dur_ms / 60000)
                 })
 
-            bb_values = []
-            if isinstance(bb_data, list):
-                bb_values = bb_data
-            elif isinstance(bb_data, dict):
-                bb_values = bb_data.get('bodyBatteryValuesArray') or []
-
-            charged = 0
-            drained = 0
-            if isinstance(bb_data, dict):
-                charged = bb_data.get('chargedValue') or 0
-                drained = bb_data.get('drainedValue') or 0
+            charged = stress_data.get('chargedValue') or 0
+            drained = stress_data.get('drainedValue') or 0
 
             return json.dumps({
                 "charged": charged,
                 "drained": drained,
                 "naps": nap_details,
-                "values_count": len(bb_values)
+                "body_battery_readings_count": len(filtered_bb),
+                "body_battery_readings": filtered_bb
             }, ensure_ascii=False)
 
         elif name == "get_activities":
@@ -1108,6 +1395,129 @@ def execute_garmin_tool(client, name: str, args: dict, user_label: str = "User")
                 "loadStatus": ts_map.get("loadStatus"),
                 "sevenDayAcuteLoad": status.get("sevenDayAcuteLoad")
             }, ensure_ascii=False)
+
+        elif name == "get_heart_rates":
+            hr_data = client.get_heart_rates(date_str) or {}
+            hr_values = hr_data.get("heartRateValues") or []
+            filtered_hr = filter_time_series(hr_values, args.get("start_time"), args.get("end_time"), downsample_factor=5)
+            return json.dumps({
+                "restingHeartRate": hr_data.get("restingHeartRate"),
+                "maxHeartRate": hr_data.get("maxHeartRate"),
+                "minHeartRate": hr_data.get("minHeartRate"),
+                "heart_rate_readings_count": len(filtered_hr),
+                "heart_rate_readings": filtered_hr
+            }, ensure_ascii=False)
+
+        elif name == "get_steps_trend":
+            steps_data = client.get_steps_data(date_str) or []
+            results = []
+
+            start_t = args.get("start_time")
+            end_t = args.get("end_time")
+
+            start_min = None
+            end_min = None
+            if start_t:
+                try:
+                    parts = start_t.split(":")
+                    start_min = int(parts[0]) * 60 + int(parts[1])
+                except Exception: pass
+            if end_t:
+                try:
+                    parts = end_t.split(":")
+                    end_min = int(parts[0]) * 60 + int(parts[1])
+                except Exception: pass
+
+            import pytz
+            from datetime import datetime
+            vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+
+            for entry in steps_data:
+                steps_count = entry.get("steps") or 0
+                if steps_count <= 0:
+                    continue
+
+                time_to_use = entry.get("startGMT") or entry.get("startTimeGMT") or entry.get("startTimeLocal")
+                if not time_to_use:
+                    continue
+
+                try:
+                    t_str = time_to_use.replace("T", " ")
+                    if "." in t_str:
+                        t_str = t_str.split(".")[0]
+
+                    if "GMT" in time_to_use or "startGMT" in entry or "startTimeGMT" in entry:
+                        dt_utc = datetime.strptime(t_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=pytz.utc)
+                        dt_local = dt_utc.astimezone(vn_tz)
+                    else:
+                        dt_local = datetime.strptime(t_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=vn_tz)
+
+                    item_min = dt_local.hour * 60 + dt_local.minute
+                    time_label = dt_local.strftime("%H:%M")
+
+                    if start_min is not None and item_min < start_min:
+                        continue
+                    if end_min is not None and item_min > end_min:
+                        continue
+
+                    results.append({
+                        "time": time_label,
+                        "steps": steps_count,
+                        "activity_level": entry.get("primaryActivityLevel")
+                    })
+                except Exception:
+                    pass
+
+            return json.dumps(results, ensure_ascii=False)
+
+        elif name == "get_hydration_data":
+            hydration = client.get_hydration_data(date_str)
+            return json.dumps(hydration, ensure_ascii=False)
+
+        elif name == "get_max_metrics":
+            max_metrics = client.get_max_metrics(date_str)
+            return json.dumps(max_metrics, ensure_ascii=False)
+
+        elif name == "get_lactate_threshold":
+            lactate = client.get_lactate_threshold(date_str)
+            return json.dumps(lactate, ensure_ascii=False)
+
+        elif name == "get_personal_records":
+            records = client.get_personal_record()
+            return json.dumps(records, ensure_ascii=False)
+
+        elif name == "get_race_predictions":
+            predictions = client.get_race_predictions(
+                startdate=args.get("start_date"),
+                enddate=args.get("end_date")
+            )
+            return json.dumps(predictions, ensure_ascii=False)
+
+        elif name == "get_fitness_age":
+            fitness_age = client.get_fitnessage_data(date_str)
+            return json.dumps(fitness_age, ensure_ascii=False)
+
+        elif name == "get_endurance_score":
+            endurance = client.get_endurance_score(
+                startdate=args.get("start_date"),
+                enddate=args.get("end_date")
+            )
+            return json.dumps(endurance, ensure_ascii=False)
+
+        elif name == "get_hill_score":
+            hill = client.get_hill_score(
+                startdate=args.get("start_date"),
+                enddate=args.get("end_date")
+            )
+            return json.dumps(hill, ensure_ascii=False)
+
+        elif name == "get_intensity_minutes":
+            intensity = client.get_intensity_minutes_data(date_str)
+            return json.dumps(intensity, ensure_ascii=False)
+
+        elif name == "get_devices":
+            devices = client.get_devices()
+            return json.dumps(devices, ensure_ascii=False)
 
         else:
             return json.dumps({"error": f"Unknown tool: {name}"})
