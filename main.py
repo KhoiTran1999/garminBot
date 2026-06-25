@@ -399,6 +399,7 @@ async def handle_ask(user_config, question, prompts):
 
     try:
         # Lấy template prompt từ Notion nếu có
+        print(f"[{name}] Available prompts: {list(prompts.keys())}")
         ask_template = prompts.get("ask_help")
         if ask_template:
             print(f"[{name}] ℹ️ Using Prompt: 'ask_help' (Model: {ask_template.get('model', 'default')})")
