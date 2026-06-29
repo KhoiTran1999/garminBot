@@ -65,7 +65,6 @@ class GeminiKeyManager:
         return default_return
 
 import requests
-import openai
 from openai import OpenAI
 
 def call_ai_api(api_key, model_name, prompt):
@@ -1547,125 +1546,20 @@ def call_ai_api_raw(api_key, model_name, messages, tools=None):
 
 async def call_ai_api_raw_async(api_key, model_name, messages, tools=None):
     from openai import AsyncOpenAI
-
-    try:
-        client = AsyncOpenAI(
-            base_url="https://khoitran1999-claude-server.hf.space/v1",
-            api_key=api_key
-        )
-        kwargs = {
-            "model": model_name,
-            "messages": messages,
-            "stream": False
-        }
-        if tools:
-            kwargs["tools"] = tools
-
-        response = await client.chat.completions.create(**kwargs)
-        return response.choices[0].message
-    except openai.AuthenticationError:
-        # Fallback to Gemini API when ROUTER9 auth fails
-        return await _call_gemini_fallback(model_name, messages, tools)
-
-
-def _convert_openai_tools_to_gemini(tools):
-    """Convert OpenAI tool format to Gemini Tool format."""
-    declarations = []
-    for tool in tools:
-        func = tool.get("function", {})
-        declarations.append(
-            types.FunctionDeclaration(
-                name=func.get("name", ""),
-                description=func.get("description", ""),
-                parameters=func.get("parameters"),
-            )
-        )
-    return [types.Tool(function_declarations=declarations)]
-
-
-def _convert_gemini_tools_to_openai(gemini_tools):
-    """Convert Gemini tool calls to OpenAI tool_calls format."""
-    openai_tools = []
-    for tc in gemini_tools:
-        args = {}
-        if tc.function_call and tc.function_call.args:
-            args = dict(tc.function_call.args)
-        openai_tools.append(_ToolCall(
-            id=f"call_{tc.function_call.name}",
-            type="function",
-            function=_FunctionCall(
-                name=tc.function_call.name,
-                arguments=json.dumps(args, ensure_ascii=False),
-            ),
-        ))
-    return openai_tools
-
-
-class _FunctionCall:
-    def __init__(self, name, arguments):
-        self.name = name
-        self.arguments = arguments
-
-class _ToolCall:
-    def __init__(self, id, type, function):
-        self.id = id
-        self.type = type
-        self.function = function
-
-class _GeminiResponse:
-    def __init__(self, content=None, tool_calls=None):
-        self.content = content
-        self.tool_calls = tool_calls
-
-
-async def _call_gemini_fallback(model_name, messages, tools=None):
-    """Fallback to Gemini API when ROUTER9 fails."""
-    gemini_key = gemini_key_manager.get_current_key()
-    if not gemini_key:
-        raise Exception("No Gemini API keys available for fallback")
-
-    client = genai.Client(api_key=gemini_key)
-
-    # Convert messages to Gemini format
-    contents = []
-    for msg in messages:
-        role = "user" if msg["role"] in ("user", "system") else "model"
-        contents.append(types.Content(
-            role=role,
-            parts=[types.Part.from_text(text=msg.get("content", ""))],
-        ))
-
-    # Convert tools if present
-    gemini_tools = None
-    if tools:
-        gemini_tools = _convert_openai_tools_to_gemini(tools)
-
-    # Build config
-    config = types.GenerateContentConfig()
-    if gemini_tools:
-        config.tools = gemini_tools
-
-    # Use the async API
-    response = await client.aio.models.generate_content(
-        model=model_name,
-        contents=contents,
-        config=config,
+    client = AsyncOpenAI(
+        base_url="https://khoitran1999-claude-server.hf.space/v1",
+        api_key=api_key
     )
+    kwargs = {
+        "model": model_name,
+        "messages": messages,
+        "stream": False
+    }
+    if tools:
+        kwargs["tools"] = tools
 
-    # Parse response
-    content = ""
-    openai_tool_calls = None
-
-    if response.candidates:
-        parts = response.candidates[0].content.parts
-        text_parts = [p.text for p in parts if hasattr(p, "text") and p.text]
-        content = "\n".join(text_parts) if text_parts else None
-
-        tool_parts = [p for p in parts if hasattr(p, "function_call") and p.function_call]
-        if tool_parts:
-            openai_tool_calls = _convert_gemini_tools_to_openai(tool_parts)
-
-    return _GeminiResponse(content=content, tool_calls=openai_tool_calls)
+    response = await client.chat.completions.create(**kwargs)
+    return response.choices[0].message
 
 async def process_data_with_worker(tool_name: str, tool_args: dict, raw_data_str: str, user_label: str = "User") -> str:
     """
@@ -1679,7 +1573,7 @@ async def process_data_with_worker(tool_name: str, tool_args: dict, raw_data_str
     except Exception:
         pass
 
-    if not Config.ROUTER9_API_KEY and gemini_key_manager.get_key_count() == 0:
+    if not Config.ROUTER9_API_KEY:
         return raw_data_str
 
     prompt = f"""
@@ -1710,19 +1604,11 @@ async def process_data_with_worker(tool_name: str, tool_args: dict, raw_data_str
             {"role": "system", "content": "You are a professional Garmin health data analyst. Answer in Vietnamese."},
             {"role": "user", "content": prompt}
         ]
-
-        if Config.ROUTER9_API_KEY:
-            response_msg = await call_ai_api_raw_async(
-                api_key=Config.ROUTER9_API_KEY,
-                model_name=Config.MODEL_WORKER,
-                messages=messages
-            )
-        else:
-            response_msg = await _call_gemini_fallback(
-                model_name=Config.MODEL_WORKER,
-                messages=messages
-            )
-
+        response_msg = await call_ai_api_raw_async(
+            api_key=Config.ROUTER9_API_KEY,
+            model_name=Config.MODEL_WORKER,
+            messages=messages
+        )
         worker_summary = response_msg.content or raw_data_str
         print(f"[{user_label}] 🧠 MODEL_WORKER finished processing {tool_name}.")
         return worker_summary
@@ -1836,97 +1722,90 @@ YÊU CẦU:
 
     # 4. Gọi AI với Tool Calling loop
     try:
-        max_iterations = 5
-        for iteration in range(max_iterations):
-            print(f"[{user_label}] Calling LLM (iteration {iteration+1})...")
-
-            if Config.ROUTER9_API_KEY:
+        if Config.ROUTER9_API_KEY:
+            max_iterations = 5
+            for iteration in range(max_iterations):
+                print(f"[{user_label}] Calling LLM (iteration {iteration+1})...")
                 response_msg = await call_ai_api_raw_async(
                     api_key=Config.ROUTER9_API_KEY,
                     model_name=model_to_use,
                     messages=messages,
                     tools=GARMIN_TOOLS if garmin_client else None
                 )
-            elif gemini_key_manager.get_key_count() > 0:
-                response_msg = await _call_gemini_fallback(
-                    model_name=model_to_use,
-                    messages=messages,
-                    tools=GARMIN_TOOLS if garmin_client else None
-                )
-            else:
-                print(f"[{user_label}] No AI API keys available.")
-                return "Hệ thống chưa được cấu hình API key."
 
-            # Check for tool calls
-            if response_msg.tool_calls:
-                # Append assistant message with tool calls
-                assistant_msg = {
-                    "role": "assistant",
-                    "content": response_msg.content,
-                    "tool_calls": [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments
-                            }
-                        } for tc in response_msg.tool_calls
-                    ]
-                }
-                messages.append(assistant_msg)
-
-                # Helper to execute a single tool pipeline async
-                async def run_single_tool_pipeline(tc):
-                    tool_name = tc.function.name
-                    import json
-                    try:
-                        tool_args = json.loads(tc.function.arguments)
-                    except Exception as je:
-                        print(f"Error parsing tool args: {je}")
-                        tool_args = {}
-
-                    # Normalize/fallback dates
-                    if "date" in tool_args and not tool_args["date"]:
-                        tool_args["date"] = current_date_str
-                    if "start_date" in tool_args and not tool_args["start_date"]:
-                        tool_args["start_date"] = current_date_str
-
-                    print(f"[{user_label}] 🛠️ AI requests tool: {tool_name} with args {tool_args}")
-
-                    # 1. Fetch Garmin Connect raw data in a non-blocking thread
-                    import asyncio
-                    raw_result = await asyncio.to_thread(execute_garmin_tool, garmin_client, tool_name, tool_args, user_label)
-
-                    # 2. Process raw data with MODEL_WORKER LLM
-                    processed_result = await process_data_with_worker(tool_name, tool_args, raw_result, user_label)
-
-                    return {
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "name": tool_name,
-                        "content": processed_result
+                # Check for tool calls
+                if response_msg.tool_calls:
+                    # Append assistant message with tool calls
+                    assistant_msg = {
+                        "role": "assistant",
+                        "content": response_msg.content,
+                        "tool_calls": [
+                            {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments
+                                }
+                            } for tc in response_msg.tool_calls
+                        ]
                     }
+                    messages.append(assistant_msg)
 
-                # Execute all requested tools in parallel
-                import asyncio
-                tool_tasks = [run_single_tool_pipeline(tc) for tc in response_msg.tool_calls]
-                tool_responses = await asyncio.gather(*tool_tasks)
+                    # Helper to execute a single tool pipeline async
+                    async def run_single_tool_pipeline(tc):
+                        tool_name = tc.function.name
+                        import json
+                        try:
+                            tool_args = json.loads(tc.function.arguments)
+                        except Exception as je:
+                            print(f"Error parsing tool args: {je}")
+                            tool_args = {}
 
-                # Append tool responses to messages history
-                messages.extend(tool_responses)
+                        # Normalize/fallback dates
+                        if "date" in tool_args and not tool_args["date"]:
+                            tool_args["date"] = current_date_str
+                        if "start_date" in tool_args and not tool_args["start_date"]:
+                            tool_args["start_date"] = current_date_str
 
-                # Continue loop to send tool responses back to LLM
-                continue
-            else:
-                # Final answer received
-                ai_reply = response_msg.content
-                if ai_reply:
-                    redis_service.save_chat_message(tele_id, "user", question, limit=10)
-                    redis_service.save_chat_message(tele_id, "assistant", ai_reply, limit=10)
-                return ai_reply
+                        print(f"[{user_label}] 🛠️ AI requests tool: {tool_name} with args {tool_args}")
 
-        return "Không thể hoàn thành yêu cầu vì vượt quá số lần gọi công cụ cho phép."
+                        # 1. Fetch Garmin Connect raw data in a non-blocking thread
+                        import asyncio
+                        raw_result = await asyncio.to_thread(execute_garmin_tool, garmin_client, tool_name, tool_args, user_label)
+
+                        # 2. Process raw data with MODEL_WORKER LLM
+                        processed_result = await process_data_with_worker(tool_name, tool_args, raw_result, user_label)
+
+                        return {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "name": tool_name,
+                            "content": processed_result
+                        }
+
+                    # Execute all requested tools in parallel
+                    import asyncio
+                    tool_tasks = [run_single_tool_pipeline(tc) for tc in response_msg.tool_calls]
+                    tool_responses = await asyncio.gather(*tool_tasks)
+
+                    # Append tool responses to messages history
+                    messages.extend(tool_responses)
+
+                    # Continue loop to send tool responses back to LLM
+                    continue
+                else:
+                    # Final answer received
+                    ai_reply = response_msg.content
+                    if ai_reply:
+                        redis_service.save_chat_message(tele_id, "user", question, limit=10)
+                        redis_service.save_chat_message(tele_id, "assistant", ai_reply, limit=10)
+                    return ai_reply
+
+            return "Không thể hoàn thành yêu cầu vì vượt quá số lần gọi công cụ cho phép."
+        else:
+            print(f"[{user_label}] ROUTER9_API_KEY not found.")
+            return "Tính năng hỏi đáp chưa được cấu hình ROUTER9_API_KEY."
     except Exception as e:
         print(f"[{user_label}] AI CS Error in agent loop: {str(e)}")
         import traceback
