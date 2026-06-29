@@ -1,4 +1,5 @@
 import os
+import json
 import pytz
 import time
 import struct
@@ -64,6 +65,7 @@ class GeminiKeyManager:
         return default_return
 
 import requests
+import openai
 from openai import OpenAI
 
 def call_ai_api(api_key, model_name, prompt):
@@ -1545,20 +1547,125 @@ def call_ai_api_raw(api_key, model_name, messages, tools=None):
 
 async def call_ai_api_raw_async(api_key, model_name, messages, tools=None):
     from openai import AsyncOpenAI
-    client = AsyncOpenAI(
-        base_url="https://khoitran1999-claude-server.hf.space/v1",
-        api_key=api_key
-    )
-    kwargs = {
-        "model": model_name,
-        "messages": messages,
-        "stream": False
-    }
-    if tools:
-        kwargs["tools"] = tools
 
-    response = await client.chat.completions.create(**kwargs)
-    return response.choices[0].message
+    try:
+        client = AsyncOpenAI(
+            base_url="https://khoitran1999-claude-server.hf.space/v1",
+            api_key=api_key
+        )
+        kwargs = {
+            "model": model_name,
+            "messages": messages,
+            "stream": False
+        }
+        if tools:
+            kwargs["tools"] = tools
+
+        response = await client.chat.completions.create(**kwargs)
+        return response.choices[0].message
+    except openai.AuthenticationError:
+        # Fallback to Gemini API when ROUTER9 auth fails
+        return await _call_gemini_fallback(model_name, messages, tools)
+
+
+def _convert_openai_tools_to_gemini(tools):
+    """Convert OpenAI tool format to Gemini FunctionDeclaration format."""
+    declarations = []
+    for tool in tools:
+        func = tool.get("function", {})
+        declarations.append(
+            types.FunctionDeclaration(
+                name=func.get("name", ""),
+                description=func.get("description", ""),
+                parameters=func.get("parameters"),
+            )
+        )
+    return declarations
+
+
+def _convert_gemini_tools_to_openai(gemini_tools):
+    """Convert Gemini tool calls to OpenAI tool_calls format."""
+    openai_tools = []
+    for tc in gemini_tools:
+        args = {}
+        if tc.function_call and tc.function_call.args:
+            args = dict(tc.function_call.args)
+        openai_tools.append(_ToolCall(
+            id=f"call_{tc.function_call.name}",
+            type="function",
+            function=_FunctionCall(
+                name=tc.function_call.name,
+                arguments=json.dumps(args, ensure_ascii=False),
+            ),
+        ))
+    return openai_tools
+
+
+class _FunctionCall:
+    def __init__(self, name, arguments):
+        self.name = name
+        self.arguments = arguments
+
+class _ToolCall:
+    def __init__(self, id, type, function):
+        self.id = id
+        self.type = type
+        self.function = function
+
+class _GeminiResponse:
+    def __init__(self, content=None, tool_calls=None):
+        self.content = content
+        self.tool_calls = tool_calls
+
+
+async def _call_gemini_fallback(model_name, messages, tools=None):
+    """Fallback to Gemini API when ROUTER9 fails."""
+    gemini_key = gemini_key_manager.get_current_key()
+    if not gemini_key:
+        raise Exception("No Gemini API keys available for fallback")
+
+    client = genai.Client(api_key=gemini_key)
+
+    # Convert messages to Gemini format
+    contents = []
+    for msg in messages:
+        role = "user" if msg["role"] in ("user", "system") else "model"
+        contents.append(types.Content(
+            role=role,
+            parts=[types.Part.from_text(text=msg.get("content", ""))],
+        ))
+
+    # Convert tools if present
+    gemini_tools = None
+    if tools:
+        gemini_tools = _convert_openai_tools_to_gemini(tools)
+
+    # Build config
+    config = types.GenerateContentConfig()
+    if gemini_tools:
+        config.tools = gemini_tools
+
+    # Use the async API
+    response = await client.aio.models.generate_content(
+        model=model_name,
+        contents=contents,
+        config=config,
+    )
+
+    # Parse response
+    content = ""
+    openai_tool_calls = None
+
+    if response.candidates:
+        parts = response.candidates[0].content.parts
+        text_parts = [p.text for p in parts if hasattr(p, "text") and p.text]
+        content = "\n".join(text_parts) if text_parts else None
+
+        tool_parts = [p for p in parts if hasattr(p, "function_call") and p.function_call]
+        if tool_parts:
+            openai_tool_calls = _convert_gemini_tools_to_openai(tool_parts)
+
+    return _GeminiResponse(content=content, tool_calls=openai_tool_calls)
 
 async def process_data_with_worker(tool_name: str, tool_args: dict, raw_data_str: str, user_label: str = "User") -> str:
     """
