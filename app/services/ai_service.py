@@ -1569,7 +1569,7 @@ async def call_ai_api_raw_async(api_key, model_name, messages, tools=None):
 
 
 def _convert_openai_tools_to_gemini(tools):
-    """Convert OpenAI tool format to Gemini FunctionDeclaration format."""
+    """Convert OpenAI tool format to Gemini Tool format."""
     declarations = []
     for tool in tools:
         func = tool.get("function", {})
@@ -1580,7 +1580,7 @@ def _convert_openai_tools_to_gemini(tools):
                 parameters=func.get("parameters"),
             )
         )
-    return declarations
+    return [types.Tool(function_declarations=declarations)]
 
 
 def _convert_gemini_tools_to_openai(gemini_tools):
