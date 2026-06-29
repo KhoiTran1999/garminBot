@@ -17,8 +17,8 @@ class Config:
     ROUTER9_API_KEY = os.getenv("ROUTER9_API_KEY")
     ROUTER9_COMBOS_MODEL = os.getenv("ROUTER9_COMBOS_MODEL")
 
-    MODEL_BRAIN = os.getenv("MODEL_BRAIN") or ROUTER9_COMBOS_MODEL or "gemini-3.1-pro"
-    MODEL_WORKER = os.getenv("MODEL_WORKER") or ROUTER9_COMBOS_MODEL or "gemini-3.1-pro"
+    MODEL_BRAIN = os.getenv("MODEL_BRAIN") or ROUTER9_COMBOS_MODEL or "gemini-pro"
+    MODEL_WORKER = os.getenv("MODEL_WORKER") or ROUTER9_COMBOS_MODEL or "gemini-pro"
 
     if not ROUTER9_API_KEY:
         print("WARNING: ROUTER9_API_KEY not found in .env! AI report will not work.")
