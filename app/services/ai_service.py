@@ -67,6 +67,27 @@ class GeminiKeyManager:
 import requests
 from openai import OpenAI
 
+def strip_thinking(text):
+    """Remove thinking block prefix from AI responses through proxy."""
+    if not text:
+        return text
+    import re
+    # 1. Remove content between thinking/thought/think tags (thinking blocks)
+    cleaned = re.sub(r'<thinking>.*?</thinking>', '', text, flags=re.DOTALL)
+    cleaned = re.sub(r'<thought>.*?</thought>', '', cleaned, flags=re.DOTALL)
+    cleaned = re.sub(r'<think>.*?</think>', '', cleaned, flags=re.DOTALL)
+
+    # 2. Handle cases where proxy prepends plain text "thought" at the start
+    if re.match(r'^(?:<thought>|<thinking>|<think>|thought|thinking|think)\b', cleaned, re.IGNORECASE):
+        # Find the first markdown header or typical Vietnamese keywords to split the thoughts
+        boundary_match = re.search(r'(?:\*\*|###?|Đánh giá|Báo cáo|Lời khuyên|Tổng quan|Phân tích|Giấc ngủ|Pin)', cleaned[7:])
+        if boundary_match:
+            boundary_idx = 7 + boundary_match.start()
+            cleaned = cleaned[boundary_idx:]
+
+    cleaned = cleaned.strip()
+    return cleaned
+
 def call_ai_api(api_key, model_name, prompt):
     client = OpenAI(
         base_url="https://khoitran1999-claude-server.hf.space/v1",
@@ -82,7 +103,7 @@ def call_ai_api(api_key, model_name, prompt):
     content = response.choices[0].message.content
     if not content:
         raise Exception("Empty response from AI model")
-    return content
+    return strip_thinking(content)
 
 # Khởi tạo Global Instance
 gemini_key_manager = GeminiKeyManager()
@@ -1796,7 +1817,7 @@ YÊU CẦU:
                     continue
                 else:
                     # Final answer received
-                    ai_reply = response_msg.content
+                    ai_reply = strip_thinking(response_msg.content)
                     if ai_reply:
                         redis_service.save_chat_message(tele_id, "user", question, limit=10)
                         redis_service.save_chat_message(tele_id, "assistant", ai_reply, limit=10)
