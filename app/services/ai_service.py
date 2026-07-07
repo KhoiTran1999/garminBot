@@ -1701,14 +1701,14 @@ async def process_data_with_worker(tool_name: str, tool_args: dict, raw_data_str
         Nhiệm vụ cụ thể của bạn được yêu cầu từ MODEL_BRAIN:
         👉 "{task}"
 
-        Hãy thực hiện chính xác chỉ dẫn trên dựa vào tập dữ liệu thô được cung cấp bên dưới. Không tự bịa thông tin. Trả về kết quả cô đọng, tập trung chính xác vào yêu cầu đó.
+        Hãy thực hiện chính xác chỉ dẫn trên dựa vào tập dữ liệu thô được cung cấp bên dưới. Không tự bịa thông tin. Trả về kết quả chi tiết, chính xác, nêu rõ các mốc thời gian, số liệu cụ thể và phân tích đầy đủ theo yêu cầu đó.
         """
     else:
         instruction_prompt = """
         Nhiệm vụ của bạn:
-        1. Trích xuất các số liệu quan trọng nhất (ví dụ: trị số trung bình, thời điểm cao nhất/thấp nhất, bất thường).
-        2. Lọc bỏ các thông tin rác, rỗng hoặc các trường kỹ thuật không cần thiết để tối ưu hóa tokens.
-        3. Định dạng kết quả dạng văn bản ngắn gọn, có gạch đầu dòng rõ ràng.
+        1. Trích xuất tất cả các số liệu quan trọng nhất (ví dụ: trị số trung bình, thời điểm cao nhất/thấp nhất, bất thường).
+        2. Lọc bỏ các thông tin rác, rỗng hoặc các trường kỹ thuật không cần thiết để tối ưu hóa tokens nhưng giữ lại đầy đủ số liệu hữu ích.
+        3. Định dạng kết quả dạng văn bản chi tiết, liệt kê đầy đủ các con số, xu hướng và mốc thời gian nổi bật, có gạch đầu dòng rõ ràng.
         4. Giữ nguyên tính chính xác tuyệt đối của các con số. Không tự bịa thông tin.
         5. Nếu dữ liệu rỗng hoặc không có gì, hãy nói rõ không ghi nhận được chỉ số nào.
         """
@@ -1728,7 +1728,7 @@ async def process_data_with_worker(tool_name: str, tool_args: dict, raw_data_str
     {raw_data_str}
     ---
 
-    Hãy trả về báo cáo phân tích cô đọng của bạn (dưới 250 từ):
+    Hãy trả về báo cáo phân tích chi tiết của bạn (đầy đủ số liệu, khoảng 300-500 từ):
     """
 
     try:

@@ -51,7 +51,7 @@ async def test_process_data_with_worker_without_task():
             args, kwargs = mock_call.call_args
             messages = kwargs.get("messages") or args[2]
             user_prompt = messages[1]["content"]
-            assert "Trích xuất các số liệu quan trọng nhất" in user_prompt
+            assert "Trích xuất tất cả các số liệu quan trọng nhất" in user_prompt
             assert "Nhiệm vụ cụ thể của bạn được yêu cầu từ MODEL_BRAIN" not in user_prompt
 
 def test_execute_garmin_tool_get_body_battery_trend():
