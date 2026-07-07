@@ -888,7 +888,7 @@ GARMIN_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_body_battery_trend",
-            "description": "Lấy dữ liệu Pin cơ thể (Body Battery) biến động trong ngày và thông tin các giấc ngủ ngắn (naps) nếu có. Hỗ trợ lọc theo khoảng thời gian cụ thể bằng tham số start_time và end_time. Sử dụng khi người dùng hỏi về biến động sạc/xả pin cơ thể, pin cơ thể buổi sáng/tối hoặc ngủ trưa.",
+            "description": "Lấy dữ liệu Pin cơ thể (Body Battery) biến động trong ngày và thông tin các giấc ngủ ngắn (naps) nếu có. Trả về tổng sạc/xả, các khoảng thời gian sạc pin (charging_periods) và khoảng thời gian sạc nhanh nhất (fastest_charging_period). Hỗ trợ lọc theo khoảng thời gian cụ thể bằng tham số start_time và end_time. Sử dụng khi người dùng hỏi về biến động sạc/xả pin cơ thể, pin cơ thể buổi sáng/tối hoặc ngủ trưa hoặc khi nào pin sạc nhanh nhất.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -1306,6 +1306,70 @@ def execute_garmin_tool(client, name: str, args: dict, user_label: str = "User")
             bb_values = bb_data.get("bodyBatteryValuesArray") or []
             filtered_bb = filter_time_series(bb_values, args.get("start_time"), args.get("end_time"), downsample_factor=5)
 
+            # Analyze raw bb_values to find charging periods and the fastest charging period
+            parsed_readings = []
+            import pytz
+            from datetime import datetime
+            vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+
+            for item in bb_values:
+                if not isinstance(item, (list, tuple)) or len(item) < 2:
+                    continue
+                ts_ms = item[0]
+                val = item[2] if len(item) >= 3 and isinstance(item[1], str) else item[1]
+                if val is None or not isinstance(val, (int, float)) or val < 0:
+                    continue
+                dt = datetime.fromtimestamp(ts_ms / 1000, vn_tz)
+                parsed_readings.append({"dt": dt, "val": val})
+
+            charging_periods = []
+            if len(parsed_readings) > 1:
+                current_segment = []
+                for r in parsed_readings:
+                    if not current_segment:
+                        current_segment.append(r)
+                    else:
+                        prev = current_segment[-1]
+                        if r["val"] >= prev["val"]:
+                            current_segment.append(r)
+                        else:
+                            if len(current_segment) > 1:
+                                start_pt = current_segment[0]
+                                end_pt = current_segment[-1]
+                                diff = end_pt["val"] - start_pt["val"]
+                                if diff > 0:
+                                    dur_mins = int((end_pt["dt"] - start_pt["dt"]).total_seconds() / 60)
+                                    if dur_mins > 0:
+                                        rate = round((diff / dur_mins) * 60, 2)
+                                        charging_periods.append({
+                                            "start_time": start_pt["dt"].strftime("%H:%M"),
+                                            "end_time": end_pt["dt"].strftime("%H:%M"),
+                                            "charge_amount": diff,
+                                            "duration_minutes": dur_mins,
+                                            "rate_per_hour": rate
+                                        })
+                            current_segment = [r]
+                if len(current_segment) > 1:
+                    start_pt = current_segment[0]
+                    end_pt = current_segment[-1]
+                    diff = end_pt["val"] - start_pt["val"]
+                    if diff > 0:
+                        dur_mins = int((end_pt["dt"] - start_pt["dt"]).total_seconds() / 60)
+                        if dur_mins > 0:
+                            rate = round((diff / dur_mins) * 60, 2)
+                            charging_periods.append({
+                                "start_time": start_pt["dt"].strftime("%H:%M"),
+                                "end_time": end_pt["dt"].strftime("%H:%M"),
+                                "charge_amount": diff,
+                                "duration_minutes": dur_mins,
+                                "rate_per_hour": rate
+                            })
+
+            fastest_period = None
+            if charging_periods:
+                valid_periods = [p for p in charging_periods if p["duration_minutes"] >= 15] or charging_periods
+                fastest_period = max(valid_periods, key=lambda x: x["rate_per_hour"])
+
             events = client.get_body_battery_events(date_str) or []
             naps = [e for e in events if e.get('eventType') == 'NAP']
 
@@ -1324,6 +1388,8 @@ def execute_garmin_tool(client, name: str, args: dict, user_label: str = "User")
                 "charged": charged,
                 "drained": drained,
                 "naps": nap_details,
+                "fastest_charging_period": fastest_period,
+                "charging_periods": charging_periods,
                 "body_battery_readings_count": len(filtered_bb),
                 "body_battery_readings": filtered_bb
             }, ensure_ascii=False)
