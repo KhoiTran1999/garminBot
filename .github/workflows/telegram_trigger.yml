@@ -34,9 +34,11 @@ jobs:
           GARMINTOKENS_TRANQUOCKHOI1999_GMAIL_COM: ${{ secrets.GARMINTOKENS_TRANQUOCKHOI1999_GMAIL_COM }}
           GARMINTOKENS_KYTRAN0102_GMAIL_COM: ${{ secrets.GARMINTOKENS_KYTRAN0102_GMAIL_COM }}
           REDIS_URL: ${{ secrets.REDIS_URL }}
-        # THAY ĐỔI Ở ĐÂY: Thêm tham số --tele_id, --question
+          CLIENT_MODE: ${{ github.event.client_payload.mode }}
+          CLIENT_USER_ID: ${{ github.event.client_payload.user_id }}
+          CLIENT_QUESTION: ${{ github.event.client_payload.question }}
         run: |
           python main.py \
-            --mode ${{ github.event.client_payload.mode }} \
-            --tele_id "${{ github.event.client_payload.user_id }}" \
-            --question "${{ github.event.client_payload.question }}"
+            --mode "$CLIENT_MODE" \
+            --tele_id "$CLIENT_USER_ID" \
+            --question "$CLIENT_QUESTION"
