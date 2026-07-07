@@ -836,6 +836,10 @@ GARMIN_TOOLS = [
                     "date": {
                         "type": "string",
                         "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD (Ví dụ: 2026-06-24)."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["date"]
@@ -853,6 +857,10 @@ GARMIN_TOOLS = [
                     "date": {
                         "type": "string",
                         "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD. Lưu ý: Ngày của giấc ngủ là ngày thức dậy (Ví dụ: ngủ đêm 23/06 thức dậy sáng 24/06 thì truyền ngày 2026-06-24)."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["date"]
@@ -878,6 +886,10 @@ GARMIN_TOOLS = [
                     "end_time": {
                         "type": "string",
                         "description": "Giờ kết thúc cần lọc, định dạng HH:MM (Ví dụ: 08:30). Mặc định là None (không lọc)."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["date"]
@@ -888,7 +900,7 @@ GARMIN_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_body_battery_trend",
-            "description": "Lấy dữ liệu Pin cơ thể (Body Battery) biến động trong ngày và thông tin các giấc ngủ ngắn (naps) nếu có. Trả về tổng sạc/xả, các khoảng thời gian sạc pin (charging_periods) và khoảng thời gian sạc nhanh nhất (fastest_charging_period). Hỗ trợ lọc theo khoảng thời gian cụ thể bằng tham số start_time và end_time. Sử dụng khi người dùng hỏi về biến động sạc/xả pin cơ thể, pin cơ thể buổi sáng/tối hoặc ngủ trưa hoặc khi nào pin sạc nhanh nhất.",
+            "description": "Lấy dữ liệu Pin cơ thể (Body Battery) biến động trong ngày và thông tin các giấc ngủ ngắn (naps) nếu có. Hỗ trợ lọc theo khoảng thời gian cụ thể bằng tham số start_time và end_time. Sử dụng khi người dùng hỏi về biến động sạc/xả pin cơ thể, pin cơ thể buổi sáng/tối hoặc ngủ trưa.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -903,6 +915,10 @@ GARMIN_TOOLS = [
                     "end_time": {
                         "type": "string",
                         "description": "Giờ kết thúc cần lọc, định dạng HH:MM (Ví dụ: 12:00)."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này (Ví dụ: 'Hãy lọc ra khoảng thời gian có tốc độ tăng Body Battery nhanh nhất')."
                     }
                 },
                 "required": ["date"]
@@ -924,6 +940,10 @@ GARMIN_TOOLS = [
                     "end_date": {
                         "type": "string",
                         "description": "Ngày kết thúc tìm kiếm, định dạng YYYY-MM-DD. Nếu để trống sẽ mặc định bằng start_date."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["start_date"]
@@ -941,6 +961,10 @@ GARMIN_TOOLS = [
                     "activity_id": {
                         "type": "integer",
                         "description": "ID bài tập (activityId) lấy từ danh sách hoạt động."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["activity_id"]
@@ -958,6 +982,10 @@ GARMIN_TOOLS = [
                     "date": {
                         "type": "string",
                         "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["date"]
@@ -975,6 +1003,10 @@ GARMIN_TOOLS = [
                     "date": {
                         "type": "string",
                         "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["date"]
@@ -992,6 +1024,10 @@ GARMIN_TOOLS = [
                     "date": {
                         "type": "string",
                         "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["date"]
@@ -1009,6 +1045,10 @@ GARMIN_TOOLS = [
                     "date": {
                         "type": "string",
                         "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["date"]
@@ -1026,6 +1066,10 @@ GARMIN_TOOLS = [
                     "date": {
                         "type": "string",
                         "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["date"]
@@ -1051,6 +1095,10 @@ GARMIN_TOOLS = [
                     "end_time": {
                         "type": "string",
                         "description": "Giờ kết thúc cần lọc, định dạng HH:MM (Ví dụ: 08:00)."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["date"]
@@ -1076,6 +1124,10 @@ GARMIN_TOOLS = [
                     "end_time": {
                         "type": "string",
                         "description": "Giờ kết thúc lọc, định dạng HH:MM (Ví dụ: 10:00)."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["date"]
@@ -1093,6 +1145,10 @@ GARMIN_TOOLS = [
                     "date": {
                         "type": "string",
                         "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["date"]
@@ -1110,6 +1166,10 @@ GARMIN_TOOLS = [
                     "date": {
                         "type": "string",
                         "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["date"]
@@ -1127,6 +1187,10 @@ GARMIN_TOOLS = [
                     "date": {
                         "type": "string",
                         "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["date"]
@@ -1140,7 +1204,12 @@ GARMIN_TOOLS = [
             "description": "Lấy danh sách kỷ lục cá nhân (Personal Records - PR) của người dùng ở các cự ly chạy bộ (1km, 5km, 10k, Half Marathon, Marathon, hoạt động xa nhất), bơi lội, đạp xe. Sử dụng khi người dùng hỏi 'Kỷ lục 5k của mình là bao nhiêu?' hoặc các câu hỏi tương tự.",
             "parameters": {
                 "type": "object",
-                "properties": {}
+                "properties": {
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
+                    }
+                }
             }
         }
     },
@@ -1159,6 +1228,10 @@ GARMIN_TOOLS = [
                     "end_date": {
                         "type": "string",
                         "description": "Ngày kết thúc định dạng YYYY-MM-DD."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["start_date"]
@@ -1176,6 +1249,10 @@ GARMIN_TOOLS = [
                     "date": {
                         "type": "string",
                         "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["date"]
@@ -1197,6 +1274,10 @@ GARMIN_TOOLS = [
                     "end_date": {
                         "type": "string",
                         "description": "Ngày kết thúc, định dạng YYYY-MM-DD."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["start_date"]
@@ -1218,6 +1299,10 @@ GARMIN_TOOLS = [
                     "end_date": {
                         "type": "string",
                         "description": "Ngày kết thúc, định dạng YYYY-MM-DD."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["start_date"]
@@ -1235,6 +1320,10 @@ GARMIN_TOOLS = [
                     "date": {
                         "type": "string",
                         "description": "Ngày cần lấy dữ liệu, định dạng YYYY-MM-DD."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
                     }
                 },
                 "required": ["date"]
@@ -1248,7 +1337,12 @@ GARMIN_TOOLS = [
             "description": "Lấy danh sách các thiết bị đồng hồ Garmin (Devices) của người dùng hiện đang kết nối với tài khoản, bao gồm tên thiết bị, mã model, số serial, phiên bản phần mềm. Sử dụng khi người dùng hỏi về thông tin đồng hồ đang sử dụng.",
             "parameters": {
                 "type": "object",
-                "properties": {}
+                "properties": {
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
+                    }
+                }
             }
         }
     }
@@ -1306,70 +1400,6 @@ def execute_garmin_tool(client, name: str, args: dict, user_label: str = "User")
             bb_values = bb_data.get("bodyBatteryValuesArray") or []
             filtered_bb = filter_time_series(bb_values, args.get("start_time"), args.get("end_time"), downsample_factor=5)
 
-            # Analyze raw bb_values to find charging periods and the fastest charging period
-            parsed_readings = []
-            import pytz
-            from datetime import datetime
-            vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
-
-            for item in bb_values:
-                if not isinstance(item, (list, tuple)) or len(item) < 2:
-                    continue
-                ts_ms = item[0]
-                val = item[2] if len(item) >= 3 and isinstance(item[1], str) else item[1]
-                if val is None or not isinstance(val, (int, float)) or val < 0:
-                    continue
-                dt = datetime.fromtimestamp(ts_ms / 1000, vn_tz)
-                parsed_readings.append({"dt": dt, "val": val})
-
-            charging_periods = []
-            if len(parsed_readings) > 1:
-                current_segment = []
-                for r in parsed_readings:
-                    if not current_segment:
-                        current_segment.append(r)
-                    else:
-                        prev = current_segment[-1]
-                        if r["val"] >= prev["val"]:
-                            current_segment.append(r)
-                        else:
-                            if len(current_segment) > 1:
-                                start_pt = current_segment[0]
-                                end_pt = current_segment[-1]
-                                diff = end_pt["val"] - start_pt["val"]
-                                if diff > 0:
-                                    dur_mins = int((end_pt["dt"] - start_pt["dt"]).total_seconds() / 60)
-                                    if dur_mins > 0:
-                                        rate = round((diff / dur_mins) * 60, 2)
-                                        charging_periods.append({
-                                            "start_time": start_pt["dt"].strftime("%H:%M"),
-                                            "end_time": end_pt["dt"].strftime("%H:%M"),
-                                            "charge_amount": diff,
-                                            "duration_minutes": dur_mins,
-                                            "rate_per_hour": rate
-                                        })
-                            current_segment = [r]
-                if len(current_segment) > 1:
-                    start_pt = current_segment[0]
-                    end_pt = current_segment[-1]
-                    diff = end_pt["val"] - start_pt["val"]
-                    if diff > 0:
-                        dur_mins = int((end_pt["dt"] - start_pt["dt"]).total_seconds() / 60)
-                        if dur_mins > 0:
-                            rate = round((diff / dur_mins) * 60, 2)
-                            charging_periods.append({
-                                "start_time": start_pt["dt"].strftime("%H:%M"),
-                                "end_time": end_pt["dt"].strftime("%H:%M"),
-                                "charge_amount": diff,
-                                "duration_minutes": dur_mins,
-                                "rate_per_hour": rate
-                            })
-
-            fastest_period = None
-            if charging_periods:
-                valid_periods = [p for p in charging_periods if p["duration_minutes"] >= 15] or charging_periods
-                fastest_period = max(valid_periods, key=lambda x: x["rate_per_hour"])
-
             events = client.get_body_battery_events(date_str) or []
             naps = [e for e in events if e.get('eventType') == 'NAP']
 
@@ -1388,8 +1418,6 @@ def execute_garmin_tool(client, name: str, args: dict, user_label: str = "User")
                 "charged": charged,
                 "drained": drained,
                 "naps": nap_details,
-                "fastest_charging_period": fastest_period,
-                "charging_periods": charging_periods,
                 "body_battery_readings_count": len(filtered_bb),
                 "body_battery_readings": filtered_bb
             }, ensure_ascii=False)
@@ -1667,19 +1695,33 @@ async def process_data_with_worker(tool_name: str, tool_args: dict, raw_data_str
     if not Config.ROUTER9_API_KEY:
         return raw_data_str
 
+    task = tool_args.get("task")
+    if task:
+        instruction_prompt = f"""
+        Nhiệm vụ cụ thể của bạn được yêu cầu từ MODEL_BRAIN:
+        👉 "{task}"
+
+        Hãy thực hiện chính xác chỉ dẫn trên dựa vào tập dữ liệu thô được cung cấp bên dưới. Không tự bịa thông tin. Trả về kết quả cô đọng, tập trung chính xác vào yêu cầu đó.
+        """
+    else:
+        instruction_prompt = """
+        Nhiệm vụ của bạn:
+        1. Trích xuất các số liệu quan trọng nhất (ví dụ: trị số trung bình, thời điểm cao nhất/thấp nhất, bất thường).
+        2. Lọc bỏ các thông tin rác, rỗng hoặc các trường kỹ thuật không cần thiết để tối ưu hóa tokens.
+        3. Định dạng kết quả dạng văn bản ngắn gọn, có gạch đầu dòng rõ ràng.
+        4. Giữ nguyên tính chính xác tuyệt đối của các con số. Không tự bịa thông tin.
+        5. Nếu dữ liệu rỗng hoặc không có gì, hãy nói rõ không ghi nhận được chỉ số nào.
+        """
+
     prompt = f"""
     Bạn là Trợ lý phân tích dữ liệu Garmin chuyên sâu (MODEL_WORKER).
-    Nhiệm vụ của bạn là đọc dữ liệu thô từ API Garmin Connect, lọc sạch, phân tích ngắn gọn và định dạng lại thành cấu trúc dễ đọc nhất để gửi cho MODEL_BRAIN.
+    Nhiệm vụ của bạn là đọc dữ liệu thô từ API Garmin Connect, lọc sạch, phân tích và định dạng lại thành cấu trúc dễ đọc nhất để gửi cho MODEL_BRAIN.
 
     Mục tiêu công cụ: {tool_name}
     Các tham số yêu cầu: {json.dumps(tool_args, ensure_ascii=False)}
 
     YÊU CẦU PHÂN TÍCH:
-    1. Trích xuất các số liệu quan trọng nhất (ví dụ: trị số trung bình, thời điểm cao nhất/thấp nhất, bất thường).
-    2. Lọc bỏ các thông tin rác, rỗng hoặc các trường kỹ thuật không cần thiết để tối ưu hóa tokens.
-    3. Định dạng kết quả dạng văn bản ngắn gọn, có gạch đầu dòng rõ ràng.
-    4. Giữ nguyên tính chính xác tuyệt đối của các con số. Không tự bịa thông tin.
-    5. Nếu dữ liệu rỗng hoặc không có gì, hãy nói rõ không ghi nhận được chỉ số nào.
+    {instruction_prompt}
 
     DỮ LIỆU THÔ (JSON) TỪ GARMIN:
     ---

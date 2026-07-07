@@ -1,81 +1,79 @@
 import json
-from datetime import datetime, timedelta
-import pytz
-from unittest.mock import MagicMock
-from app.services.ai_service import execute_garmin_tool
+from unittest.mock import patch, MagicMock, AsyncMock
+import pytest
+from app.services.ai_service import process_data_with_worker, execute_garmin_tool
 
-def test_get_body_battery_trend_charging_periods():
-    # Setup mock client
+@pytest.mark.asyncio
+async def test_process_data_with_worker_with_task():
+    # Mock call_ai_api_raw_async
+    with patch("app.services.ai_service.call_ai_api_raw_async", new_callable=AsyncMock) as mock_call:
+        mock_response = MagicMock()
+        mock_response.content = "processed result by AI"
+        mock_call.return_value = mock_response
+
+        tool_args = {"date": "2026-07-07", "task": "Hãy lấy khoảng thời gian Body battery tăng nhanh nhất"}
+
+        with patch("app.services.ai_service.Config") as mock_cfg:
+            mock_cfg.ROUTER9_API_KEY = "fake-key"
+            mock_cfg.MODEL_WORKER = "gemini-worker"
+
+            res = await process_data_with_worker("get_body_battery_trend", tool_args, '{"charged": 10}')
+
+            assert res == "processed result by AI"
+            mock_call.assert_called_once()
+
+            # Check prompt contents
+            args, kwargs = mock_call.call_args
+            messages = kwargs.get("messages") or args[2]
+            user_prompt = messages[1]["content"]
+            assert "Nhiệm vụ cụ thể của bạn được yêu cầu từ MODEL_BRAIN:" in user_prompt
+            assert "Hãy lấy khoảng thời gian Body battery tăng nhanh nhất" in user_prompt
+
+@pytest.mark.asyncio
+async def test_process_data_with_worker_without_task():
+    # Mock call_ai_api_raw_async
+    with patch("app.services.ai_service.call_ai_api_raw_async", new_callable=AsyncMock) as mock_call:
+        mock_response = MagicMock()
+        mock_response.content = "processed result by AI"
+        mock_call.return_value = mock_response
+
+        tool_args = {"date": "2026-07-07"}
+
+        with patch("app.services.ai_service.Config") as mock_cfg:
+            mock_cfg.ROUTER9_API_KEY = "fake-key"
+            mock_cfg.MODEL_WORKER = "gemini-worker"
+
+            res = await process_data_with_worker("get_body_battery_trend", tool_args, '{"charged": 10}')
+
+            assert res == "processed result by AI"
+
+            # Check prompt contents
+            args, kwargs = mock_call.call_args
+            messages = kwargs.get("messages") or args[2]
+            user_prompt = messages[1]["content"]
+            assert "Trích xuất các số liệu quan trọng nhất" in user_prompt
+            assert "Nhiệm vụ cụ thể của bạn được yêu cầu từ MODEL_BRAIN" not in user_prompt
+
+def test_execute_garmin_tool_get_body_battery_trend():
     client = MagicMock()
 
-    # Generate some mock body battery readings representing charging and discharging
-    # Timezone: Asia/Ho_Chi_Minh
-    vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
-    base_time = vn_tz.localize(datetime(2026, 7, 7, 0, 0, 0))
-
-    # We will construct a sequence:
-    # 00:00 - 02:00: Sleep (charging from 10 to 60) -> 40 points (every 3 mins)
-    # 02:00 - 04:00: Drop/awake (discharging from 60 to 50) -> 40 points
-    # 04:00 - 06:00: Sleep again (charging from 50 to 90) -> 40 points
-    # Let's verify our charging segment detector splits this into 2 charging periods:
-    # 1. 00:00 to 02:00 (amount: 50, rate_per_hour = 25.0)
-    # 2. 04:00 to 06:00 (amount: 40, rate_per_hour = 20.0)
-    # The fastest should be 00:00 to 02:00
-
-    bb_values = []
-
-    # 00:00 to 02:00 (charging)
-    for i in range(41): # 0 to 40 inclusive (40 * 3 = 120 mins)
-        t = base_time + timedelta(minutes=i * 3)
-        val = 10.0 + i * 1.25 # starts at 10.0, ends at 60.0
-        bb_values.append([int(t.timestamp() * 1000), val])
-
-    # 02:03 to 03:57 (discharging)
-    # To trigger a segment end, the next value must be strictly smaller.
-    for i in range(1, 40):
-        t = base_time + timedelta(hours=2, minutes=i * 3)
-        val = 60.0 - i * 0.3 # strictly decreasing (60.0 to 48.3)
-        bb_values.append([int(t.timestamp() * 1000), val])
-
-    # 04:00 to 06:00 (charging again)
-    for i in range(41):
-        t = base_time + timedelta(hours=4, minutes=i * 3)
-        val = 40.0 + i * 1.25 # starts at 40.0, ends at 90.0
-        bb_values.append([int(t.timestamp() * 1000), val])
-
-    # Mock return values for client
+    # Mock client output
     client.get_body_battery.return_value = [{
-        "bodyBatteryValuesArray": bb_values,
-        "charged": 90,
-        "drained": 10
+        "bodyBatteryValuesArray": [[1783357200000, 50]],
+        "charged": 40,
+        "drained": 20
     }]
-    client.get_body_battery_events.return_value = []
+    client.get_body_battery_events.return_value = [
+        {"eventType": "NAP", "durationInMilliseconds": 1800000, "startTimeLocal": "2026-07-07T12:00:00"}
+    ]
 
-    # Call execute_garmin_tool
     args = {"date": "2026-07-07"}
     res_str = execute_garmin_tool(client, "get_body_battery_trend", args)
 
     res = json.loads(res_str)
-
-    # Verify fastest charging period
-    fastest = res.get("fastest_charging_period")
-    assert fastest is not None
-    assert fastest["start_time"] == "00:00"
-    assert fastest["end_time"] == "02:00"
-    assert fastest["charge_amount"] == 50.0
-    assert fastest["duration_minutes"] == 120
-    assert fastest["rate_per_hour"] == 25.0
-
-    # Verify charging periods
-    periods = res.get("charging_periods")
-    assert len(periods) == 2
-
-    assert periods[0]["start_time"] == "00:00"
-    assert periods[0]["end_time"] == "02:00"
-    assert periods[0]["charge_amount"] == 50.0
-    assert periods[0]["rate_per_hour"] == 25.0
-
-    assert periods[1]["start_time"] == "04:00"
-    assert periods[1]["end_time"] == "06:00"
-    assert periods[1]["charge_amount"] == 50.0
-    assert periods[1]["rate_per_hour"] == 25.0
+    assert res["charged"] == 40
+    assert res["drained"] == 20
+    assert len(res["naps"]) == 1
+    assert res["naps"][0]["duration_minutes"] == 30
+    assert "body_battery_readings" in res
+    assert "fastest_charging_period" not in res  # Verifies we reverted Python calculation
