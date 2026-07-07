@@ -797,12 +797,15 @@ def filter_time_series(values_list, start_time=None, end_time=None, downsample_f
     filtered = []
 
     for item in values_list:
-        if not isinstance(item, list) and not isinstance(item, tuple):
+        if not isinstance(item, (list, tuple)):
             continue
         if len(item) < 2:
             continue
-        ts_ms, val = item[0], item[1]
-        if val is None or val < 0:
+        ts_ms = item[0]
+        # In some Garmin endpoints (e.g. get_all_day_stress), body battery values
+        # have type at index 1 and value at index 2 (e.g. [timestamp_ms, 'MEASURED', 25, 2.0])
+        val = item[2] if len(item) >= 3 and isinstance(item[1], str) else item[1]
+        if val is None or not isinstance(val, (int, float)) or val < 0:
             continue
 
         dt = datetime.fromtimestamp(ts_ms / 1000, vn_tz)
@@ -1297,9 +1300,10 @@ def execute_garmin_tool(client, name: str, args: dict, user_label: str = "User")
             }, ensure_ascii=False)
 
         elif name == "get_body_battery_trend":
-            # get_all_day_stress contains bodyBatteryValuesArray
-            stress_data = client.get_all_day_stress(date_str) or {}
-            bb_values = stress_data.get("bodyBatteryValuesArray") or []
+            # Use get_body_battery which contains correct charged/drained and clean 2-item bb values
+            bb_data_list = client.get_body_battery(date_str) or []
+            bb_data = bb_data_list[0] if bb_data_list else {}
+            bb_values = bb_data.get("bodyBatteryValuesArray") or []
             filtered_bb = filter_time_series(bb_values, args.get("start_time"), args.get("end_time"), downsample_factor=5)
 
             events = client.get_body_battery_events(date_str) or []
@@ -1313,8 +1317,8 @@ def execute_garmin_tool(client, name: str, args: dict, user_label: str = "User")
                     "duration_minutes": int(dur_ms / 60000)
                 })
 
-            charged = stress_data.get('chargedValue') or 0
-            drained = stress_data.get('drainedValue') or 0
+            charged = bb_data.get('charged') or 0
+            drained = bb_data.get('drained') or 0
 
             return json.dumps({
                 "charged": charged,

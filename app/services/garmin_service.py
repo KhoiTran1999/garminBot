@@ -42,9 +42,12 @@ def get_time_series_stress_bb(client, date_iso, activities, user_label="User"):
         # 2. Gán stress và bb
         def assign_to_block(vals_array, val_type):
             for item in vals_array:
-                if len(item) != 2: continue
-                ts_ms, val = item
-                if val is None or val < 0: continue # Bỏ qua data rỗng hoặc -1
+                if not isinstance(item, (list, tuple)) or len(item) < 2:
+                    continue
+                ts_ms = item[0]
+                val = item[2] if val_type == "bb" and len(item) >= 3 and isinstance(item[1], str) else item[1]
+                if val is None or not isinstance(val, (int, float)) or val < 0:
+                    continue # Bỏ qua data rỗng hoặc không hợp lệ
 
                 dt = datetime.fromtimestamp(ts_ms / 1000, vn_tz)
                 block_idx = dt.hour // 2
