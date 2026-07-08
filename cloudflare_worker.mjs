@@ -67,13 +67,38 @@ export default {
                 mode = promptMode;
                 targetRepo = "garmin";
                 question = text;
+
+                // Delete Message 1 (ForceReply prompt)
+                const msg1Id = update.message.reply_to_message.message_id;
+                await deleteMessage(env, chatId, msg1Id);
+
+                // Delete Message 2 (Skip button prompt, usually msg1Id + 1)
+                await deleteMessage(env, chatId, msg1Id + 1);
+
+                // Delete the user's reply message
+                await deleteMessage(env, chatId, update.message.message_id);
+
                 await sendMessage(env, chatId, `🚀 Đang phân tích kèm thông tin cập nhật mới nhất của bạn...`);
             }
             // === Check Callback run: ===
             else if (text.startsWith("run:")) {
-                mode = text.substring(4);
+                const parts = text.split(":");
+                mode = parts[1];
                 targetRepo = "garmin";
                 question = "";
+
+                // Delete Message 2 (contains the button)
+                if (update.callback_query && update.callback_query.message) {
+                    const msg2Id = update.callback_query.message.message_id;
+                    await deleteMessage(env, chatId, msg2Id);
+                }
+
+                // Delete Message 1 (ForceReply prompt)
+                if (parts[2]) {
+                    const msg1Id = parseInt(parts[2]);
+                    await deleteMessage(env, chatId, msg1Id);
+                }
+
                 await sendMessage(env, chatId, `🚀 Bắt đầu phân tích dữ liệu...`);
             }
             // === Check Garmin Inline Buttons or Clean Commands (No Args) ===
@@ -266,6 +291,19 @@ async function triggerGitHub(env, mode, chatId, targetRepo, question = "") {
     return true;
 }
 
+async function deleteMessage(env, chatId, messageId) {
+    const url = `https://api.telegram.org/bot${env.TG_BOT_TOKEN}/deleteMessage`;
+    try {
+        await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: chatId, message_id: messageId })
+        });
+    } catch (e) {
+        console.log("Error deleting message:", e);
+    }
+}
+
 async function askForUserNote(env, chatId, mode, featureName) {
     const url = `https://api.telegram.org/bot${env.TG_BOT_TOKEN}/sendMessage`;
 
@@ -278,18 +316,24 @@ async function askForUserNote(env, chatId, mode, featureName) {
         }
     };
 
-    await fetch(url, {
+    const resp1 = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload1)
     });
+
+    let msg1Id = null;
+    if (resp1.ok) {
+        const data1 = await resp1.json();
+        msg1Id = data1.result.message_id;
+    }
 
     const payload2 = {
         chat_id: chatId,
         text: `Hoặc nếu không có gì mới để cập nhật, hãy nhấn nút dưới đây để phân tích luôn:`,
         reply_markup: {
             inline_keyboard: [
-                [{ text: "❌ Tôi không có gì mới để cập nhật", callback_data: `run:${mode}` }]
+                [{ text: "❌ Tôi không có gì mới để cập nhật", callback_data: msg1Id ? `run:${mode}:${msg1Id}` : `run:${mode}` }]
             ]
         }
     };
