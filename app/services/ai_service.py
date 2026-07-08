@@ -109,10 +109,12 @@ def call_ai_api(api_key, model_name, prompt):
 gemini_key_manager = GeminiKeyManager()
 
 
-def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=None, mode="daily", aqi_data=None):
+def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=None, mode="daily", aqi_data=None, user_note=None):
     """
     Gọi AI để lấy lời khuyên. Tự động xoay key khi gặp lỗi Quota.
     """
+    user_note_str = user_note.strip() if (user_note and isinstance(user_note, str) and user_note.strip() and user_note != "None") else ""
+
     # Lấy thông tin cá nhân hóa từ Notion
     user_label = user_config.get('name', 'VĐV')
     email = user_config.get('email')
@@ -175,7 +177,10 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
             sys_p = prompt_template.get("system_prompt", "")
             user_tmplt = prompt_template.get("user_template", "")
             model_to_use = prompt_template.get("model", default_model)
-            
+
+            if user_note_str and "{user_note}" not in user_tmplt and "{user_notes}" not in user_tmplt:
+                user_tmplt += "\n\n- **Ghi chú hôm nay từ người dùng:** {user_note}"
+
             # Format User Template only (System Prompt is usually static or minimal)
             # If system prompt specifically needs formatting, add it here.
             # Assuming currently only user_template needs dynamic data.
@@ -184,6 +189,8 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
                 goal=goal,
                 injury=injury,
                 note=note,
+                user_note=user_note_str or "Không có",
+                user_notes=user_note_str or "Không có",
                 current_now=current_now,
                 r_score=r_score,
                 r_data=r_data,
@@ -198,8 +205,8 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
                 timeseries_text=timeseries_text,
                 aqi_info=aqi_text
             )
-            
-            # Concatenate System + User. Or better: keep them separate if API supports. 
+
+            # Concatenate System + User. Or better: keep them separate if API supports.
             # But generate_content usually takes string or list.
             # Let's combine them for simplicity:
             formatted_prompt = f"{sys_p}\n\n{formatted_user_part}"
@@ -210,11 +217,18 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
     elif prompt_template and isinstance(prompt_template, str):
          # Old behavior / Fallback if string passed
          try:
-            formatted_prompt = prompt_template.format(
+            if user_note_str and "{user_note}" not in prompt_template and "{user_notes}" not in prompt_template:
+                prompt_template_modified = prompt_template + "\n\n- **Ghi chú hôm nay từ người dùng:** {user_note}"
+            else:
+                prompt_template_modified = prompt_template
+
+            formatted_prompt = prompt_template_modified.format(
                 user_label=user_label,
                 goal=goal,
                 injury=injury,
                 note=note,
+                user_note=user_note_str or "Không có",
+                user_notes=user_note_str or "Không có",
                 current_now=current_now,
                 r_score=r_score,
                 r_data=r_data,
@@ -245,6 +259,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
         - **Mục tiêu:** {goal}
         - **Chấn thương:** {injury}
         - **Lưu ý:** {note}
+        - **Ghi chú hôm nay từ người dùng:** {user_note_str if user_note_str else "Không có"}
 
         DỮ LIỆU ĐÊM QUA & SÁNG NAY:
         - **Điểm Sẵn sàng (Readiness):** {r_score}/100
@@ -286,6 +301,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
         - **Mục tiêu hiện tại:** {goal}
         - **Tình trạng chấn thương/Bệnh lý:** {injury}
         - **Ghi chú thêm:** {note}
+        - **Ghi chú hôm nay từ người dùng:** {user_note_str if user_note_str else "Không có"}
 
         DỮ LIỆU CƠ THỂ HÔM NAY:
         - **Điểm Sẵn sàng:** {r_score}/100
@@ -344,10 +360,11 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
         print(f"[{user_label}] AI Error: {str(e)}")
         return "AI Coach đang bận hoặc gặp lỗi. Vui lòng thử lại sau."
 
-def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None, aqi_data=None):
+def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None, aqi_data=None, user_note=None):
     """
     Gọi AI để phân tích năng lượng (Body Battery & Stress) trong ngày.
     """
+    user_note_str = user_note.strip() if (user_note and isinstance(user_note, str) and user_note.strip() and user_note != "None") else ""
     user_label = user_config.get('name', 'VĐV')
     email = user_config.get('email')
     goal = user_config.get('goal', 'Duy trì sức khỏe')
@@ -385,9 +402,14 @@ def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None
             user_tmplt = prompt_template.get("user_template", "")
             model_to_use = prompt_template.get("model", default_model)
 
+            if user_note_str and "{user_note}" not in user_tmplt and "{user_notes}" not in user_tmplt:
+                user_tmplt += "\n\n- **Ghi chú hôm nay từ người dùng:** {user_note}"
+
             formatted_user_part = user_tmplt.format(
                 user_label=user_label,
                 goal=goal,
+                user_note=user_note_str or "Không có",
+                user_notes=user_note_str or "Không có",
                 current_now=current_now,
                 body_battery=body_battery,
                 stress=stress,
@@ -400,9 +422,16 @@ def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None
             formatted_prompt = None
     elif prompt_template and isinstance(prompt_template, str):
          try:
-            formatted_prompt = prompt_template.format(
+            if user_note_str and "{user_note}" not in prompt_template and "{user_notes}" not in prompt_template:
+                prompt_template_modified = prompt_template + "\n\n- **Ghi chú hôm nay từ người dùng:** {user_note}"
+            else:
+                prompt_template_modified = prompt_template
+
+            formatted_prompt = prompt_template_modified.format(
                 user_label=user_label,
                 goal=goal,
+                user_note=user_note_str or "Không có",
+                user_notes=user_note_str or "Không có",
                 current_now=current_now,
                 body_battery=body_battery,
                 stress=stress,
@@ -422,6 +451,7 @@ def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None
         Thời gian báo cáo hiện tại: {current_now}
 
         MỤC TIÊU VĐV: {goal}
+        GHI CHÚ HÔM NAY TỪ NGƯỜI DÙNG: {user_note_str if user_note_str else "Không có"}
 
         DỮ LIỆU HIỆN TẠI:
         - **Pin cơ thể (Body Battery):** {body_battery}/100
@@ -463,10 +493,11 @@ def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None
     except Exception as e:
         print(f"[{user_label}] AI Error: {str(e)}")
         return "AI Coach đang bận hoặc gặp lỗi. Vui lòng thử lại sau."
-def get_workout_analysis_advice(activity_data_list, user_config, prompt_template=None, aqi_data=None):
+def get_workout_analysis_advice(activity_data_list, user_config, prompt_template=None, aqi_data=None, user_note=None):
     """
     Phân tích chi tiết (Time-series) các bài tập trong 24h.
     """
+    user_note_str = user_note.strip() if (user_note and isinstance(user_note, str) and user_note.strip() and user_note != "None") else ""
     user_label = user_config.get('name', 'VĐV')
     email = user_config.get('email')
     goal = user_config.get('goal', 'Cải thiện thành tích')
@@ -508,9 +539,14 @@ def get_workout_analysis_advice(activity_data_list, user_config, prompt_template
             user_tmplt = prompt_template.get("user_template", "")
             model_to_use = prompt_template.get("model", default_model)
 
+            if user_note_str and "{user_note}" not in user_tmplt and "{user_notes}" not in user_tmplt:
+                user_tmplt += "\n\n- **Ghi chú hôm nay từ người dùng:** {user_note}"
+
             formatted_user = user_tmplt.format(
                 user_label=user_label,
                 goal=goal,
+                user_note=user_note_str or "Không có",
+                user_notes=user_note_str or "Không có",
                 current_now=current_now,
                 activities_json=activities_json,
                 aqi_info=aqi_text
@@ -522,9 +558,16 @@ def get_workout_analysis_advice(activity_data_list, user_config, prompt_template
 
     elif prompt_template and isinstance(prompt_template, str):
         try:
-            formatted_prompt = prompt_template.format(
+            if user_note_str and "{user_note}" not in prompt_template and "{user_notes}" not in prompt_template:
+                prompt_template_modified = prompt_template + "\n\n- **Ghi chú hôm nay từ người dùng:** {user_note}"
+            else:
+                prompt_template_modified = prompt_template
+
+            formatted_prompt = prompt_template_modified.format(
                 user_label=user_label,
                 goal=goal,
+                user_note=user_note_str or "Không có",
+                user_notes=user_note_str or "Không có",
                 current_now=current_now,
                 activities_json=activities_json,
                 aqi_info=aqi_text
@@ -540,9 +583,10 @@ def get_workout_analysis_advice(activity_data_list, user_config, prompt_template
         Bạn là Chuyên gia phân tích dữ liệu thể thao (Sports Data Scientist) và HLV chuyên nghiệp.
         Hãy phân tích dữ liệu bài tập trong 24h qua của VĐV: {user_label}.
         Thời gian báo cáo: {current_now}
-        
+
         MỤC TIÊU VĐV: {goal}
         THÔNG TIN MÔI TRƯỜNG (AQI): {aqi_text}
+        GHI CHÚ HÔM NAY TỪ NGƯỜI DÙNG: {user_note_str if user_note_str else "Không có"}
         
         DỮ LIỆU CHI TIẾT (JSON):
         {activities_json}

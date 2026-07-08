@@ -76,7 +76,7 @@ def login_garmin(email, password, name):
     return client
 
 
-async def handle_daily_or_sleep(user_config, mode, prompts):
+async def handle_daily_or_sleep(user_config, mode, prompts, user_note=None):
     """
     Xử lý báo cáo hàng ngày (Daily) hoặc phân tích giấc ngủ (Sleep Analysis).
     """
@@ -142,7 +142,7 @@ async def handle_daily_or_sleep(user_config, mode, prompts):
         else:
             print(f"[{name}] ⚠️ Prompt '{prompt_key}' not found in Notion. Using Hardcoded Fallback.")
 
-        ai_report = get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=advice_template, mode=mode, aqi_data=aqi_data)
+        ai_report = get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=advice_template, mode=mode, aqi_data=aqi_data, user_note=user_note)
 
         # 3. Tạo Voice Script & Audio
         if tele_id:
@@ -171,7 +171,7 @@ async def handle_daily_or_sleep(user_config, mode, prompts):
         if tele_id:
             redis_service.delete_dedup(tele_id, date_iso, mode)
 
-async def handle_workout_analysis(user_config, prompts):
+async def handle_workout_analysis(user_config, prompts, user_note=None):
     """
     Xử lý phân tích bài tập chuyên sâu (Workout Analysis).
     """
@@ -244,7 +244,7 @@ async def handle_workout_analysis(user_config, prompts):
         else:
              print(f"[{name}] ⚠️ Prompt 'workout_analysis' not found in Notion. Using Fallback.")
 
-        ai_report = get_workout_analysis_advice(activities, user_config, prompt_template=workout_template, aqi_data=aqi_data)
+        ai_report = get_workout_analysis_advice(activities, user_config, prompt_template=workout_template, aqi_data=aqi_data, user_note=user_note)
         
         if not ai_report:
             print(f"[{name}] ⚠️ Không tạo được báo cáo AI.")
@@ -281,7 +281,7 @@ async def handle_workout_analysis(user_config, prompts):
         if tele_id:
             redis_service.delete_dedup(tele_id, date_iso, mode)
 
-async def handle_battery_analysis(user_config, prompts):
+async def handle_battery_analysis(user_config, prompts, user_note=None):
     """
     Xử lý phân tích năng lượng chuyên biệt (Body Battery & Stress).
     """
@@ -344,7 +344,7 @@ async def handle_battery_analysis(user_config, prompts):
              print(f"[{name}] ⚠️ Prompt 'battery_analysis' not found in Notion. Using Fallback.")
 
         # Gọi hàm chuyên biệt phân tích Pin
-        ai_report = get_battery_analysis_advice(today, r_data, user_config, prompt_template=battery_template, aqi_data=aqi_data)
+        ai_report = get_battery_analysis_advice(today, r_data, user_config, prompt_template=battery_template, aqi_data=aqi_data, user_note=user_note)
 
         if not ai_report:
             print(f"[{name}] ⚠️ Không tạo được báo cáo AI.")
@@ -472,15 +472,15 @@ async def main():
         tasks = []
         for user in users:
             if mode == "workout":
-                tasks.append(handle_workout_analysis(user, prompts))
+                tasks.append(handle_workout_analysis(user, prompts, user_note=question))
             elif mode == "battery":
-                tasks.append(handle_battery_analysis(user, prompts))
+                tasks.append(handle_battery_analysis(user, prompts, user_note=question))
             elif mode == "ask":
                 tasks.append(handle_ask(user, question, prompts))
             elif mode in ["daily", "daily_report", "sleep_analysis"]:
                 # Clean up mode string explicitly if needed
                 run_mode = "sleep_analysis" if mode == "sleep_analysis" else "daily"
-                tasks.append(handle_daily_or_sleep(user, run_mode, prompts))
+                tasks.append(handle_daily_or_sleep(user, run_mode, prompts, user_note=question))
             else:
                 print(f"Unknown mode: {mode}")
                 return

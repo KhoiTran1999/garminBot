@@ -43,33 +43,42 @@ export default {
             let targetRepo = "";
             let question = "";
 
+            const trimmedText = text.trim();
+            const firstSpaceIndex = trimmedText.indexOf(" ");
+            let command = firstSpaceIndex !== -1 ? trimmedText.substring(0, firstSpaceIndex) : trimmedText;
+            let cmdArgs = firstSpaceIndex !== -1 ? trimmedText.substring(firstSpaceIndex).trim() : "";
+
             // === GARMIN BOT Commands ===
-            if (text.startsWith("/ask")) {
+            if (command === "/ask") {
                 mode = "ask";
                 targetRepo = "garmin";
-                question = text.substring(4).trim();
+                question = cmdArgs;
                 if (!question) {
                     await sendMessage(env, chatId, "⚠️ Vui lòng nhập câu hỏi sau lệnh /ask.");
                     return new Response("OK");
                 }
                 await sendMessage(env, chatId, "💬 Đang trả lời...");
-            } else if (text === "/daily" || text === "daily" || text === "/report") {
+            } else if (command === "/daily" || command === "daily" || command === "/report") {
                 mode = "daily";
                 targetRepo = "garmin";
-                await sendMessage(env, chatId, "🚀 Đang lấy báo cáo ngày...");
-            } else if (text === "/sleep" || text === "sleep_analysis") {
+                question = cmdArgs;
+                await sendMessage(env, chatId, question ? "🚀 Đang lấy báo cáo ngày kèm thông tin thêm..." : "🚀 Đang lấy báo cáo ngày...");
+            } else if (command === "/sleep" || command === "sleep_analysis") {
                 mode = "sleep_analysis";
                 targetRepo = "garmin";
-                await sendMessage(env, chatId, "💤 Đang phân tích giấc ngủ...");
-            } else if (text === "/workout" || text === "workout") {
+                question = cmdArgs;
+                await sendMessage(env, chatId, question ? "💤 Đang phân tích giấc ngủ kèm thông tin thêm..." : "💤 Đang phân tích giấc ngủ...");
+            } else if (command === "/workout" || command === "/activities" || command === "workout") {
                 mode = "workout";
                 targetRepo = "garmin";
-                await sendMessage(env, chatId, "🏃 Đang phân tích bài tập...");
-            } else if (text === "/battery" || text === "battery") {
+                question = cmdArgs;
+                await sendMessage(env, chatId, question ? "🏃 Đang phân tích bài tập kèm thông tin thêm..." : "🏃 Đang phân tích bài tập...");
+            } else if (command === "/battery" || command === "battery") {
                 mode = "battery";
                 targetRepo = "garmin";
-                await sendMessage(env, chatId, "🔋 Đang phân tích năng lượng...");
-                
+                question = cmdArgs;
+                await sendMessage(env, chatId, question ? "🔋 Đang phân tích năng lượng kèm thông tin thêm..." : "🔋 Đang phân tích năng lượng...");
+
             // === UEH NOTION Commands ===
             } else if (text === "/taskreport" || text === "daily-report") {
                 mode = "daily-report";
