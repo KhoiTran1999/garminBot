@@ -78,7 +78,7 @@ export default {
                 // Delete the user's reply message
                 await deleteMessage(env, chatId, update.message.message_id);
 
-                await sendMessage(env, chatId, `🚀 Đang phân tích kèm thông tin cập nhật mới nhất của bạn...`);
+                await sendMessage(env, chatId, `🚀 Đang phân tích kèm thông tin cập nhật mới nhất của bạn...`, null, true);
             }
             // === Check Callback run: ===
             else if (text.startsWith("run:")) {
@@ -99,7 +99,7 @@ export default {
                     await deleteMessage(env, chatId, msg1Id);
                 }
 
-                await sendMessage(env, chatId, `🚀 Bắt đầu phân tích dữ liệu...`);
+                await sendMessage(env, chatId, `🚀 Bắt đầu phân tích dữ liệu...`, null, true);
             }
             // === Check Garmin Inline Buttons or Clean Commands (No Args) ===
             else if ((command === "/daily" || command === "/report" || command === "daily") && !cmdArgs) {
@@ -124,37 +124,37 @@ export default {
                     await sendMessage(env, chatId, "⚠️ Vui lòng nhập câu hỏi sau lệnh /ask.");
                     return new Response("OK");
                 }
-                await sendMessage(env, chatId, "💬 Đang trả lời...");
+                await sendMessage(env, chatId, "💬 Đang trả lời...", null, true);
             } else if (command === "/daily" || command === "daily" || command === "/report") {
                 mode = "daily";
                 targetRepo = "garmin";
                 question = cmdArgs;
-                await sendMessage(env, chatId, "🚀 Đang lấy báo cáo ngày...");
+                await sendMessage(env, chatId, "🚀 Đang lấy báo cáo ngày...", null, true);
             } else if (command === "/sleep" || command === "sleep_analysis") {
                 mode = "sleep_analysis";
                 targetRepo = "garmin";
                 question = cmdArgs;
-                await sendMessage(env, chatId, "💤 Đang phân tích giấc ngủ...");
+                await sendMessage(env, chatId, "💤 Đang phân tích giấc ngủ...", null, true);
             } else if (command === "/workout" || command === "/activities" || command === "workout") {
                 mode = "workout";
                 targetRepo = "garmin";
                 question = cmdArgs;
-                await sendMessage(env, chatId, "🏃 Đang phân tích bài tập...");
+                await sendMessage(env, chatId, "🏃 Đang phân tích bài tập...", null, true);
             } else if (command === "/battery" || command === "battery") {
                 mode = "battery";
                 targetRepo = "garmin";
                 question = cmdArgs;
-                await sendMessage(env, chatId, "🔋 Đang phân tích năng lượng...");
+                await sendMessage(env, chatId, "🔋 Đang phân tích năng lượng...", null, true);
 
             // === UEH NOTION Commands ===
             } else if (text === "/taskreport" || text === "daily-report") {
                 mode = "daily-report";
                 targetRepo = "ueh";
-                await sendMessage(env, chatId, "📊 Đang tạo báo cáo task...");
+                await sendMessage(env, chatId, "📊 Đang tạo báo cáo task...", null, true);
             } else if (text === "/study" || text === "study-assistant") {
                 mode = "study-assistant";
                 targetRepo = "ueh";
-                await sendMessage(env, chatId, "🎓 Đang tạo bài ôn tập...");
+                await sendMessage(env, chatId, "🎓 Đang tạo bài ôn tập...", null, true);
 
             // === General ===
             } else if (text === "/start" || text === "/help" || text === "/menu") {
@@ -233,9 +233,14 @@ async function checkNotionUser(env, telegramId) {
     return data.results.length > 0;
 }
 
-async function sendMessage(env, chatId, text, replyMarkup = null) {
+async function sendMessage(env, chatId, text, replyMarkup = null, disableNotification = false) {
     const url = `https://api.telegram.org/bot${env.TG_BOT_TOKEN}/sendMessage`;
-    const payload = { chat_id: chatId, text: text, parse_mode: "Markdown" };
+    const payload = {
+        chat_id: chatId,
+        text: text,
+        parse_mode: "Markdown",
+        disable_notification: disableNotification
+    };
 
     if (replyMarkup) {
         payload.reply_markup = replyMarkup;
