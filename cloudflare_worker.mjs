@@ -169,16 +169,21 @@ async function checkNotionUser(env, telegramId) {
 async function sendMessage(env, chatId, text, replyMarkup = null) {
     const url = `https://api.telegram.org/bot${env.TG_BOT_TOKEN}/sendMessage`;
     const payload = { chat_id: chatId, text: text, parse_mode: "Markdown" };
-    
+
     if (replyMarkup) {
         payload.reply_markup = replyMarkup;
     }
 
-    await fetch(url, {
+    const resp = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
     });
+
+    if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`Telegram sendMessage failed: ${resp.status} - ${errText}`);
+    }
 }
 
 async function triggerGitHub(env, mode, chatId, targetRepo, question = "") {
