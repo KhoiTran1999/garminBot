@@ -18,6 +18,7 @@ Chao mung ban den voi he thong ho tro khach hang cua Garmin AI Coach Pro. Duoi d
 *   Tai tap luyen (Acute Load): Su dung phuong phap TRIMP Index (Training Impulse) dua tren nhip tim va thoi gian tap luyen de dinh luong do met moi tich luy trong 7 ngay qua.
 *   Rut gon Du lieu Bieu do (Downsampling): Du lieu Stress va Body Battery tho cua Garmin (lay moi 3 phut) duoc gom nhom va tinh toan lai theo tung khoi 2 gio de tranh tran ngu canh AI nhung van dam bao phan anh dung xu huong bien dong trong ngay.
 *   Mapping Hoat dong: Cac bai tap the thao duoc anh xa chinh xac vao cac khoi thoi gian 2 gio cua bieu do Stress/Body Battery de giup AI phan tich nguyen nhan tang stress/tut pin do tap luyen.
+*   Custom Training Readiness: Voi cac dong ho Garmin khong ho tro san tinh nang Training Readiness, he thong se tu dong tinh toan diem san sang (tu 1-100) va danh gia bang cong thuc quy doi rieng biet (dua tren: Giac ngu, Pin co the, Stress, HRV, Nhit tim nghi, Oxy mau, va Nhip tho). Tính năng này có thể được gọi thủ công qua tool `get_custom_training_readiness`.
 
 ## 4. Lien He Ho Tro
 *   Quan tri vien (Admin) Telegram: @KhoiTran99 (ID: 1088200599, Ten: Khoi Tran, Ngon ngu: Tieng Viet).

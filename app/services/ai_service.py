@@ -1102,6 +1102,27 @@ GARMIN_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_custom_training_readiness",
+            "description": "Tính toán và lấy điểm sẵn sàng tập luyện tự chế (Custom Training Readiness) từ 1-100 dựa trên thuật toán tích hợp (dành cho các đồng hồ không hỗ trợ tính năng này mặc định). Trả về điểm số, đánh giá trạng thái và chi tiết các chỉ số thành phần (giấc ngủ, stress, pin cơ thể, HRV, nhịp tim nghỉ, oxy máu, nhịp thở). Sử dụng khi người dùng hỏi về độ sẵn sàng tập luyện hoặc khi get_training_readiness không trả về dữ liệu.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "Ngày cần lấy và tính toán dữ liệu, định dạng YYYY-MM-DD."
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Chỉ thị hoặc yêu cầu phân tích cụ thể từ MODEL_BRAIN gửi cho MODEL_WORKER để xử lý tập dữ liệu này."
+                    }
+                },
+                "required": ["date"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_training_status",
             "description": "Lấy trạng thái tập luyện hiện tại (Training Status) ví dụ: Productive (Hiệu quả), Peaking (Đạt đỉnh), Maintaining (Duy trì), Detraining (Ngừng tập). Cung cấp thông tin về chỉ số VO2 Max, trạng thái thể lực (fitnessStatus), tải tập luyện hiện tại (loadStatus), và tải tập luyện 7 ngày qua (sevenDayAcuteLoad). Sử dụng khi người dùng hỏi về VO2 Max, tải tập luyện hoặc trạng thái huấn luyện dài hạn.",
             "parameters": {
@@ -1538,15 +1559,94 @@ def execute_garmin_tool(client, name: str, args: dict, user_label: str = "User")
             }, ensure_ascii=False)
 
         elif name == "get_training_readiness":
-            readiness = client.get_training_readiness(date_str) or {}
+            try:
+                readiness = client.get_training_readiness(date_str) or {}
+            except Exception as ex:
+                print(f"[{user_label}] Native get_training_readiness failed: {ex}. Falling back to custom calculation.")
+                readiness = {}
+
             r_map = readiness.get("trainingReadinessMap") or readiness
+            score = r_map.get("scoreValue")
+
+            if score is None:
+                print(f"[{user_label}] Garmin Training Readiness score is None/unavailable. Running custom calculation...")
+                from datetime import datetime
+                from app.services.garmin_service import get_processed_data
+                try:
+                    date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+                except Exception:
+                    from datetime import date
+                    date_obj = date.today()
+                r_data, r_score, _ = get_processed_data(client, date_obj, user_label)
+
+                # Map custom score to Garmin-like assessment
+                if r_score >= 90:
+                    assessment = "Prime"
+                elif r_score >= 75:
+                    assessment = "Good"
+                elif r_score >= 50:
+                    assessment = "Moderate"
+                elif r_score >= 25:
+                    assessment = "Low"
+                else:
+                    assessment = "Poor"
+
+                return json.dumps({
+                    "score": r_score,
+                    "assessment": assessment,
+                    "recovery_time_hours": r_data.get("recovery_time_hours") or 0,
+                    "sleep_history_score": r_data.get("sleep_hours") or 0,
+                    "hrv_status": r_data.get("hrv_status") or "N/A",
+                    "stress_history_score": r_data.get("stress") or 50,
+                    "is_custom_calculated": True
+                }, ensure_ascii=False)
+
             return json.dumps({
-                "score": r_map.get("scoreValue"),
+                "score": score,
                 "assessment": r_map.get("readinessAssessment"),
                 "recovery_time_hours": r_map.get("recoveryTimeHours"),
                 "sleep_history_score": r_map.get("sleepHistoryScoreValue"),
                 "hrv_status": r_map.get("hrvStatus"),
                 "stress_history_score": r_map.get("stressHistoryScoreValue")
+            }, ensure_ascii=False)
+
+        elif name == "get_custom_training_readiness":
+            from datetime import datetime
+            from app.services.garmin_service import get_processed_data
+
+            try:
+                date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+            except Exception:
+                from datetime import date
+                date_obj = date.today()
+
+            r_data, r_score, l_data = get_processed_data(client, date_obj, user_label)
+
+            assessment = "Unknown"
+            if r_score >= 90:
+                assessment = "Prime (Xuất sắc)"
+            elif r_score >= 75:
+                assessment = "Good (Tốt)"
+            elif r_score >= 50:
+                assessment = "Moderate (Trung bình)"
+            elif r_score >= 25:
+                assessment = "Low (Thấp)"
+            else:
+                assessment = "Poor (Kém)"
+
+            return json.dumps({
+                "score": r_score,
+                "assessment": assessment,
+                "sleep_hours": round(r_data.get("sleep_hours", 0), 1),
+                "sleep_quality": r_data.get("sleep_text", "").split("\n")[0] if r_data.get("sleep_text") else "N/A",
+                "stress_average": r_data.get("stress", 0),
+                "body_battery": r_data.get("body_battery", 0),
+                "hrv_status": r_data.get("hrv_status") or "N/A",
+                "resting_heart_rate": r_data.get("rhr") or 0,
+                "avg_spo2": r_data.get("avg_spo2") or "N/A",
+                "avg_sleep_resp": r_data.get("avg_sleep_resp") or "N/A",
+                "nap_duration_minutes": int(r_data.get("nap_seconds", 0) // 60),
+                "seven_day_acute_load": int(l_data.get("avg_daily_load", 0))
             }, ensure_ascii=False)
 
         elif name == "get_training_status":

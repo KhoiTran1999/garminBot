@@ -181,3 +181,87 @@ def test_get_workout_and_battery_user_note(mock_cfg, mock_redis, mock_call):
     args, kwargs = mock_call.call_args
     prompt_sent = args[2]
     assert "GHI CHÚ HÔM NAY TỪ NGƯỜI DÙNG: căng thẳng cả ngày" in prompt_sent
+
+
+def test_execute_garmin_tool_get_custom_training_readiness():
+    from datetime import datetime
+    client = MagicMock()
+
+    # Mock get_processed_data to return custom readiness data
+    mock_r_data = {
+        "sleep_hours": 7.2,
+        "sleep_text": "Tổng ngủ thực: 7h 12p\n- Ngủ sâu: 1h\n- Ngủ nông: 5h\n- Ngủ mơ: 1h 12p\n- Thức: 0p",
+        "stress": 25,
+        "body_battery": 60,
+        "hrv_status": "BALANCED",
+        "rhr": 55,
+        "avg_spo2": 96,
+        "avg_sleep_resp": 14,
+        "nap_seconds": 1200
+    }
+    mock_r_score = 82
+    mock_l_data = {
+        "avg_daily_load": 150
+    }
+
+    with patch("app.services.garmin_service.get_processed_data", return_value=(mock_r_data, mock_r_score, mock_l_data)) as mock_gpd:
+        args = {"date": "2026-07-08"}
+        res_str = execute_garmin_tool(client, "get_custom_training_readiness", args, user_label="Test User")
+
+        res = json.loads(res_str)
+        assert res["score"] == 82
+        assert "Good" in res["assessment"]
+        assert res["sleep_hours"] == 7.2
+        assert res["stress_average"] == 25
+        assert res["body_battery"] == 60
+        assert res["hrv_status"] == "BALANCED"
+        assert res["resting_heart_rate"] == 55
+        assert res["avg_spo2"] == 96
+        assert res["avg_sleep_resp"] == 14
+        assert res["nap_duration_minutes"] == 20
+        assert res["seven_day_acute_load"] == 150
+
+        # We assert the date compared is a date object
+        called_args, called_kwargs = mock_gpd.call_args
+        assert called_args[0] == client
+        assert called_args[1].year == 2026
+        assert called_args[1].month == 7
+        assert called_args[1].day == 8
+        assert called_args[2] == "Test User"
+
+
+def test_execute_garmin_tool_get_training_readiness_fallback():
+    client = MagicMock()
+    # Mock native client call to return None / raise exception, or return dict with None score Value
+    client.get_training_readiness.return_value = {
+        "trainingReadinessMap": {
+            "scoreValue": None
+        }
+    }
+
+    mock_r_data = {
+        "sleep_hours": 8.0,
+        "stress": 20,
+        "body_battery": 80,
+        "hrv_status": "BALANCED",
+        "rhr": 50,
+        "recovery_time_hours": 12
+    }
+    mock_r_score = 95
+    mock_l_data = {}
+
+    with patch("app.services.garmin_service.get_processed_data", return_value=(mock_r_data, mock_r_score, mock_l_data)) as mock_gpd:
+        args = {"date": "2026-07-08"}
+        res_str = execute_garmin_tool(client, "get_training_readiness", args, user_label="Test User")
+
+        res = json.loads(res_str)
+        assert res["score"] == 95
+        assert res["assessment"] == "Prime"
+        assert res["is_custom_calculated"] is True
+        assert res["recovery_time_hours"] == 12
+        assert res["sleep_history_score"] == 8.0
+        assert res["hrv_status"] == "BALANCED"
+        assert res["stress_history_score"] == 20
+
+        mock_gpd.assert_called_once()
+
