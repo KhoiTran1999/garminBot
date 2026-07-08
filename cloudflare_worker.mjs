@@ -48,8 +48,50 @@ export default {
             let command = firstSpaceIndex !== -1 ? trimmedText.substring(0, firstSpaceIndex) : trimmedText;
             let cmdArgs = firstSpaceIndex !== -1 ? trimmedText.substring(firstSpaceIndex).trim() : "";
 
-            // === GARMIN BOT Commands ===
-            if (command === "/ask") {
+            // Check if this is a reply to the askForUserNote prompt
+            let isReplyToPrompt = false;
+            let promptMode = "";
+            if (update.message && update.message.reply_to_message && update.message.reply_to_message.text) {
+                const replyText = update.message.reply_to_message.text;
+                if (replyText.includes("Bạn đã chọn tính năng")) {
+                    isReplyToPrompt = true;
+                    if (replyText.includes("[Phân tích Giấc ngủ]")) promptMode = "sleep_analysis";
+                    else if (replyText.includes("[Sức khỏe & Đề xuất Tập]")) promptMode = "daily";
+                    else if (replyText.includes("[Phân tích Buổi tập]")) promptMode = "workout";
+                    else if (replyText.includes("[Bắt mạch Năng lượng]")) promptMode = "battery";
+                }
+            }
+
+            // === Check Reply to Prompt ===
+            if (isReplyToPrompt && promptMode) {
+                mode = promptMode;
+                targetRepo = "garmin";
+                question = text;
+                await sendMessage(env, chatId, `🚀 Đang phân tích kèm thông tin cập nhật mới nhất của bạn...`);
+            }
+            // === Check Callback run: ===
+            else if (text.startsWith("run:")) {
+                mode = text.substring(4);
+                targetRepo = "garmin";
+                question = "";
+                await sendMessage(env, chatId, `🚀 Bắt đầu phân tích dữ liệu...`);
+            }
+            // === Check Garmin Inline Buttons or Clean Commands (No Args) ===
+            else if ((command === "/daily" || command === "/report" || command === "daily") && !cmdArgs) {
+                await askForUserNote(env, chatId, "daily", "Sức khỏe & Đề xuất Tập");
+                return new Response("OK");
+            } else if ((command === "/sleep" || command === "sleep_analysis") && !cmdArgs) {
+                await askForUserNote(env, chatId, "sleep_analysis", "Phân tích Giấc ngủ");
+                return new Response("OK");
+            } else if ((command === "/workout" || command === "/activities" || command === "workout") && !cmdArgs) {
+                await askForUserNote(env, chatId, "workout", "Phân tích Buổi tập");
+                return new Response("OK");
+            } else if ((command === "/battery" || command === "battery") && !cmdArgs) {
+                await askForUserNote(env, chatId, "battery", "Bắt mạch Năng lượng");
+                return new Response("OK");
+            }
+            // === Regular Garmin Commands (With Args) / Ask ===
+            else if (command === "/ask") {
                 mode = "ask";
                 targetRepo = "garmin";
                 question = cmdArgs;
@@ -58,26 +100,26 @@ export default {
                     return new Response("OK");
                 }
                 await sendMessage(env, chatId, "💬 Đang trả lời...");
-            } else if (command === "/daily" || command === "/report" || command === "daily") {
+            } else if (command === "/daily" || command === "daily" || command === "/report") {
                 mode = "daily";
                 targetRepo = "garmin";
                 question = cmdArgs;
-                await sendMessage(env, chatId, question ? "🚀 Đang lấy báo cáo ngày kèm thông tin thêm..." : "🚀 Đang lấy báo cáo ngày...");
+                await sendMessage(env, chatId, "🚀 Đang lấy báo cáo ngày...");
             } else if (command === "/sleep" || command === "sleep_analysis") {
                 mode = "sleep_analysis";
                 targetRepo = "garmin";
                 question = cmdArgs;
-                await sendMessage(env, chatId, question ? "💤 Đang phân tích giấc ngủ kèm thông tin thêm..." : "💤 Đang phân tích giấc ngủ...");
+                await sendMessage(env, chatId, "💤 Đang phân tích giấc ngủ...");
             } else if (command === "/workout" || command === "/activities" || command === "workout") {
                 mode = "workout";
                 targetRepo = "garmin";
                 question = cmdArgs;
-                await sendMessage(env, chatId, question ? "🏃 Đang phân tích bài tập kèm thông tin thêm..." : "🏃 Đang phân tích bài tập...");
+                await sendMessage(env, chatId, "🏃 Đang phân tích bài tập...");
             } else if (command === "/battery" || command === "battery") {
                 mode = "battery";
                 targetRepo = "garmin";
                 question = cmdArgs;
-                await sendMessage(env, chatId, question ? "🔋 Đang phân tích năng lượng kèm thông tin thêm..." : "🔋 Đang phân tích năng lượng...");
+                await sendMessage(env, chatId, "🔋 Đang phân tích năng lượng...");
 
             // === UEH NOTION Commands ===
             } else if (text === "/taskreport" || text === "daily-report") {
@@ -88,7 +130,7 @@ export default {
                 mode = "study-assistant";
                 targetRepo = "ueh";
                 await sendMessage(env, chatId, "🎓 Đang tạo bài ôn tập...");
-                
+
             // === General ===
             } else if (text === "/start" || text === "/help" || text === "/menu") {
                 const replyMarkup = {
@@ -101,7 +143,7 @@ export default {
                         [{ text: "🔋 Bắt mạch Năng lượng", callback_data: "battery" }]
                     ]
                 };
-                
+
                 await sendMessage(env, chatId, "👋 Chào mừng bạn đến với **Garmin AI Coach**!\nHãy chọn chức năng để bắt đầu:", replyMarkup);
                 return new Response("OK");
             } else {
@@ -222,4 +264,39 @@ async function triggerGitHub(env, mode, chatId, targetRepo, question = "") {
         return false;
     }
     return true;
+}
+
+async function askForUserNote(env, chatId, mode, featureName) {
+    const url = `https://api.telegram.org/bot${env.TG_BOT_TOKEN}/sendMessage`;
+
+    const payload1 = {
+        chat_id: chatId,
+        text: `✍️ Bạn đã chọn tính năng [${featureName}]. Bạn có muốn cập nhật thêm thông tin gì mới nhất hôm nay không (ví dụ: tối qua ngủ muộn, cơ thể mệt mỏi, đau chân...)?\n\n👉 Hãy gõ vào ô chat phía dưới để cập nhật.`,
+        reply_markup: {
+            force_reply: true,
+            selective: true
+        }
+    };
+
+    await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload1)
+    });
+
+    const payload2 = {
+        chat_id: chatId,
+        text: `Hoặc nếu không có gì mới để cập nhật, hãy nhấn nút dưới đây để phân tích luôn:`,
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: "❌ Tôi không có gì mới để cập nhật", callback_data: `run:${mode}` }]
+            ]
+        }
+    };
+
+    await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload2)
+    });
 }
