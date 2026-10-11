@@ -15,7 +15,8 @@ import {
   Menu, 
   X,
   History,
-  RefreshCw
+  RefreshCw,
+  Download
 } from "lucide-react";
 
 export const Navbar: React.FC = () => {
@@ -110,6 +111,16 @@ export const Navbar: React.FC = () => {
               </button>
             )}
 
+            {/* Install PWA Button */}
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent("open-pwa-install"))}
+              title="Cài đặt App vào điện thoại / máy tính"
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-cyan-500/30 bg-cyan-950/40 text-cyan-300 hover:text-white hover:bg-cyan-900/50 text-xs font-medium transition shadow-sm"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>Cài đặt App</span>
+            </button>
+
             {user && (
               <div className="hidden md:flex items-center gap-2.5 pl-2 border-l border-slate-800">
                 <Link href="/profile" className="text-right hover:opacity-80 transition">
@@ -162,6 +173,18 @@ export const Navbar: React.FC = () => {
               </Link>
             );
           })}
+
+          {/* Nút Cài đặt App trên mobile */}
+          <button
+            onClick={() => {
+              setMobileMenuOpen(false);
+              window.dispatchEvent(new CustomEvent("open-pwa-install"));
+            }}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-semibold text-cyan-300 bg-cyan-950/40 border border-cyan-850/50 hover:bg-cyan-900/50 transition"
+          >
+            <Download className="h-4 w-4 text-cyan-400" />
+            <span>Cài đặt Ứng dụng (App)</span>
+          </button>
           {user && (
             <div className="pt-2.5 mt-2 border-t border-slate-800 flex items-center justify-between">
               <div>
