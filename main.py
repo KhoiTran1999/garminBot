@@ -33,8 +33,16 @@ def login_garmin(email, password, name):
     env_token_key = f"GARMINTOKENS_{email.replace('@', '_').replace('.', '_').upper()}"
     token_string = os.getenv(env_token_key) or os.getenv("GARMINTOKENS")
     
-    token_dir = os.path.join(os.getcwd(), "tokens", email)
-    os.makedirs(token_dir, exist_ok=True)
+    # Hỗ trợ môi trường Serverless (Vercel, AWS Lambda) nơi root dir là read-only
+    import tempfile
+    clean_email = email.replace('@', '_').replace('.', '_')
+    try:
+        token_dir = os.path.join(os.getcwd(), "tokens", email)
+        os.makedirs(token_dir, exist_ok=True)
+    except (OSError, PermissionError):
+        token_dir = os.path.join(tempfile.gettempdir(), "tokens", clean_email)
+        os.makedirs(token_dir, exist_ok=True)
+
     client = Garmin(email, password)
 
     try:

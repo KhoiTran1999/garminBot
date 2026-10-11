@@ -67,25 +67,34 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
     throw new Error("Phiên làm việc hết hạn. Vui lòng đăng nhập lại.");
   }
 
+  // Đọc response text một lần duy nhất để tránh lỗi "body stream already read"
+  const rawText = await response.text();
+  let data: any = null;
+  try {
+    data = rawText ? JSON.parse(rawText) : null;
+  } catch {
+    // rawText không phải JSON (ví dụ Vercel HTML error page 500/404)
+  }
+
   if (!response.ok) {
     let errorDetail = `Lỗi máy chủ (${response.status})`;
-    try {
-      const errorJson = await response.json();
-      errorDetail = errorJson.detail || errorDetail;
-    } catch {
-      const errorText = await response.text();
-      if (errorText) {
-        errorDetail = errorText.length > 200 ? errorText.substring(0, 200) + "..." : errorText;
-      }
+    if (data && data.detail) {
+      errorDetail = data.detail;
+    } else if (rawText && !rawText.trim().startsWith("<")) {
+      errorDetail = rawText.length > 200 ? rawText.substring(0, 200) + "..." : rawText;
+    } else if (response.status === 500) {
+      errorDetail = "Lỗi máy chủ nội bộ (500). Vui lòng kiểm tra lại cấu hình biến môi trường trên Vercel.";
+    } else if (response.status === 404) {
+      errorDetail = `Không tìm thấy endpoint API (${url}).`;
     }
     throw new Error(errorDetail);
   }
 
-  try {
-    return await response.json();
-  } catch {
+  if (data === null) {
     throw new Error("Phản hồi từ máy chủ không đúng định dạng JSON.");
   }
+
+  return data;
 }
 
 export const api = {
@@ -95,10 +104,33 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.detail || "Đăng nhập thất bại");
+
+    const rawText = await res.text();
+    let data: any = null;
+    try {
+      data = rawText ? JSON.parse(rawText) : null;
+    } catch {
+      // Body không phải JSON
     }
+
+    if (!res.ok) {
+      let errorMsg = data?.detail;
+      if (!errorMsg) {
+        if (res.status === 500) {
+          errorMsg = "Lỗi máy chủ nội bộ (500). Backend API gặp sự cố khởi động trên Vercel.";
+        } else if (res.status === 404) {
+          errorMsg = "Không tìm thấy API đăng nhập (404).";
+        } else {
+          errorMsg = `Đăng nhập thất bại (Mã lỗi ${res.status})`;
+        }
+      }
+      throw new Error(errorMsg);
+    }
+
+    if (!data || !data.token) {
+      throw new Error("Phản hồi đăng nhập không hợp lệ.");
+    }
+
     setAuthToken(data.token);
     return data;
   },

@@ -44,12 +44,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import tempfile
+
 JWT_SECRET = os.getenv("JWT_SECRET", "garmin-ai-coach-super-secret-key-2026")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_DAYS = 14
 
-AUDIO_DIR = os.path.join(ROOT_DIR, "public", "audio")
-os.makedirs(AUDIO_DIR, exist_ok=True)
+# Trên Vercel Serverless, hệ thống file /var/task là read-only.
+# Chỉ có /tmp (tempfile.gettempdir()) là có quyền ghi.
+AUDIO_DIR = os.path.join(tempfile.gettempdir(), "audio")
+try:
+    os.makedirs(AUDIO_DIR, exist_ok=True)
+except Exception as dir_err:
+    print(f"Warning creating audio dir: {dir_err}")
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Lỗi máy chủ nội bộ: {str(exc)}"}
+    )
+
 
 # --- Pydantic Schemas ---
 class LoginRequest(BaseModel):
@@ -301,13 +318,14 @@ async def run_analysis(req: RunAnalysisRequest, user: dict = Depends(get_current
 
 @app.get("/api/audio/{filename}")
 def get_audio_file(filename: str):
-    # Đảm bảo an toàn không bị Path Traversal
     safe_filename = os.path.basename(filename)
     audio_path = os.path.join(AUDIO_DIR, safe_filename)
     if not os.path.exists(audio_path):
-        # Kiểm tra thêm ở thư mục gốc
+        public_audio = os.path.join(ROOT_DIR, "public", "audio", safe_filename)
         root_audio = os.path.join(ROOT_DIR, safe_filename)
-        if os.path.exists(root_audio):
+        if os.path.exists(public_audio):
+            audio_path = public_audio
+        elif os.path.exists(root_audio):
             audio_path = root_audio
         else:
             raise HTTPException(status_code=404, detail="Không tìm thấy tệp âm thanh.")
