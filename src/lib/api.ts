@@ -28,21 +28,71 @@ export interface ChatMessage {
 }
 
 const TOKEN_KEY = "garmin_coach_token";
+const USER_KEY = "garmin_coach_user";
 
 export const getAuthToken = (): string | null => {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(TOKEN_KEY);
+  try {
+    const local = localStorage.getItem(TOKEN_KEY);
+    if (local) return local;
+
+    // Fallback sang cookie nếu localStorage bị Safari/PWA xóa tạm thời
+    const match = document.cookie.match(new RegExp("(^| )" + TOKEN_KEY + "=([^;]+)"));
+    if (match) {
+      const cookieVal = decodeURIComponent(match[2]);
+      try {
+        localStorage.setItem(TOKEN_KEY, cookieVal);
+      } catch {}
+      return cookieVal;
+    }
+  } catch (e) {
+    console.warn("Lỗi đọc token:", e);
+  }
+  return null;
 };
 
 export const setAuthToken = (token: string): void => {
   if (typeof window !== "undefined") {
-    localStorage.setItem(TOKEN_KEY, token);
+    try {
+      localStorage.setItem(TOKEN_KEY, token);
+      // Lưu cookie 60 ngày để duy trì phiên qua lại giữa PWA và Safari/Chrome
+      const maxAge = 60 * 24 * 60 * 60;
+      document.cookie = `${TOKEN_KEY}=${encodeURIComponent(token)}; path=/; max-age=${maxAge}; SameSite=Lax`;
+    } catch (e) {
+      console.warn("Lỗi lưu token:", e);
+    }
   }
 };
 
 export const clearAuthToken = (): void => {
   if (typeof window !== "undefined") {
-    localStorage.removeItem(TOKEN_KEY);
+    try {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      document.cookie = `${TOKEN_KEY}=; path=/; max-age=0; SameSite=Lax`;
+    } catch (e) {
+      console.warn("Lỗi xóa token:", e);
+    }
+  }
+};
+
+export const getStoredUser = (): UserProfile | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+export const setStoredUser = (user: UserProfile): void => {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(USER_KEY, JSON.stringify(user));
+    } catch (e) {
+      console.warn("Lỗi lưu user cache:", e);
+    }
   }
 };
 
@@ -64,7 +114,9 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
     if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
       window.location.href = "/login";
     }
-    throw new Error("Phiên làm việc hết hạn. Vui lòng đăng nhập lại.");
+    const err = new Error("Phiên làm việc hết hạn. Vui lòng đăng nhập lại.");
+    (err as any).status = 401;
+    throw err;
   }
 
   // Đọc response text một lần duy nhất để tránh lỗi "body stream already read"
@@ -132,6 +184,9 @@ export const api = {
     }
 
     setAuthToken(data.token);
+    if (data.user) {
+      setStoredUser(data.user);
+    }
     return data;
   },
 

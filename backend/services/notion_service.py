@@ -3,6 +3,7 @@ import httpx
 from dotenv import load_dotenv
 
 from backend.config import Config
+from backend.services.redis_service import redis_service
 
 def get_users_from_notion():
     """
@@ -41,7 +42,8 @@ def get_users_from_notion():
             
             if response.status_code != 200:
                 print(f"❌ Lỗi API Notion: {response.status_code} - {response.text}")
-                return []
+                cached = redis_service.get_user_cache("__notion_active_users__")
+                return cached if cached else []
 
             data = response.json()
             results = data.get("results", [])
@@ -86,8 +88,11 @@ def get_users_from_notion():
                     users.append(user)
             
             print(f"Found {len(users)} active users.")
+            if users:
+                redis_service.set_user_cache("__notion_active_users__", users, ttl_seconds=86400 * 7)
             return users
 
     except Exception as e:
         print(f"Exception calling Notion: {e}")
-        return []
+        cached = redis_service.get_user_cache("__notion_active_users__")
+        return cached if cached else []

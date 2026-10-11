@@ -48,7 +48,7 @@ import tempfile
 
 JWT_SECRET = os.getenv("JWT_SECRET", "garmin-ai-coach-super-secret-key-2026")
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_DAYS = 14
+JWT_EXPIRATION_DAYS = 60
 
 # Trên Vercel Serverless, hệ thống file /var/task là read-only.
 # Chỉ có /tmp (tempfile.gettempdir()) là có quyền ghi.
@@ -115,10 +115,35 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Token đã hết hạn hoặc không hợp lệ")
 
-    users = get_users_from_notion()
-    for u in users:
-        if u.get("email", "").strip().lower() == email.strip().lower():
-            return u
+    # 1. Kiểm tra nhanh trong Redis cache (< 5ms, không phụ thuộc Notion network)
+    cached_user = redis_service.get_user_cache(email)
+    if cached_user:
+        return cached_user
+
+    # 2. Tra cứu Notion nếu chưa có trong Redis cache
+    try:
+        users = get_users_from_notion()
+        for u in users:
+            if u.get("email", "").strip().lower() == email.strip().lower():
+                redis_service.set_user_cache(email, u, ttl_seconds=86400 * 60)
+                return u
+    except Exception as e:
+        print(f"Lỗi khi tra cứu Notion cho user {email}: {e}")
+
+    # 3. Fallback an toàn từ JWT payload để người dùng không bao giờ bị văng đăng nhập đột ngột
+    if payload.get("sub"):
+        fallback_user = {
+            "email": payload.get("sub"),
+            "name": payload.get("name", "Vận động viên"),
+            "goal": payload.get("goal", ""),
+            "injury": payload.get("injury", ""),
+            "note": payload.get("note", ""),
+            "telegram_chat_id": payload.get("telegram_chat_id", ""),
+            # Giữ password nếu có lưu trong cache trước đó
+            "password": ""
+        }
+        redis_service.set_user_cache(email, fallback_user, ttl_seconds=86400 * 60)
+        return fallback_user
 
     raise HTTPException(status_code=404, detail="Không tìm thấy người dùng trong hệ thống Notion")
 
@@ -134,13 +159,24 @@ def health_check():
 
 @app.post("/api/auth/login")
 def login(req: LoginRequest):
-    users = get_users_from_notion()
     target_user = None
-    for u in users:
-        if u.get("email", "").strip().lower() == req.email.strip().lower():
-            if u.get("password", "").strip() == req.password.strip():
-                target_user = u
-                break
+
+    # 1. Tìm user trong Notion
+    try:
+        users = get_users_from_notion()
+        for u in users:
+            if u.get("email", "").strip().lower() == req.email.strip().lower():
+                if u.get("password", "").strip() == req.password.strip():
+                    target_user = u
+                    break
+    except Exception as e:
+        print(f"Lỗi khi kiểm tra Notion khi login: {e}")
+
+    # 2. Fallback kiểm tra Redis cache nếu Notion tạm thời chậm/lỗi
+    if not target_user:
+        cached = redis_service.get_user_cache(req.email)
+        if cached and cached.get("password", "").strip() == req.password.strip():
+            target_user = cached
 
     if not target_user:
         raise HTTPException(
@@ -148,7 +184,17 @@ def login(req: LoginRequest):
             detail="Email hoặc mật khẩu không chính xác, hoặc tài khoản chưa kích hoạt trên Notion."
         )
 
-    token = create_access_token({"sub": target_user["email"], "name": target_user["name"]})
+    # Lưu user vào Redis cache với TTL 60 ngày
+    redis_service.set_user_cache(target_user["email"], target_user, ttl_seconds=86400 * 60)
+
+    token = create_access_token({
+        "sub": target_user["email"],
+        "name": target_user.get("name", "Vận động viên"),
+        "goal": target_user.get("goal", ""),
+        "injury": target_user.get("injury", ""),
+        "note": target_user.get("note", ""),
+        "telegram_chat_id": target_user.get("telegram_chat_id", "")
+    })
     return {
         "token": token,
         "user": {

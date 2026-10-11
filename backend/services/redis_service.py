@@ -191,5 +191,43 @@ class RedisService:
 
         return self._execute(_op, default_return=False)
 
+    def get_user_cache(self, email: str):
+        """
+        Lấy thông tin user đã lưu trong Redis cache để tránh gọi Notion liên tục.
+        """
+        if not email:
+            return None
+
+        key = f"user_cache:{email.strip().lower()}"
+
+        def _op():
+            raw = self._client.get(key)
+            if raw:
+                import json
+                try:
+                    return json.loads(raw)
+                except:
+                    return None
+            return None
+
+        return self._execute(_op, default_return=None)
+
+    def set_user_cache(self, email: str, user_data: dict, ttl_seconds: int = 86400 * 60) -> bool:
+        """
+        Lưu thông tin user vào Redis cache (mặc định 60 ngày) để duy trì phiên đăng nhập bền bỉ.
+        """
+        if not email or not user_data:
+            return False
+
+        key = f"user_cache:{email.strip().lower()}"
+        import json
+
+        def _op():
+            val = json.dumps(user_data, ensure_ascii=False)
+            return bool(self._client.set(key, val, ex=ttl_seconds))
+
+        return self._execute(_op, default_return=False)
+
 # Initialize a global Redis service instance
 redis_service = RedisService()
+
