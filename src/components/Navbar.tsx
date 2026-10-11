@@ -25,12 +25,11 @@ export const Navbar: React.FC = () => {
   if (pathname === "/login") return null;
 
   const navItems = [
-    { name: "Tổng quan", href: "/", icon: Compass },
+    { name: "HLV AI Chat", href: "/", icon: MessageSquare },
     { name: "Sức khỏe ngày", href: "/daily", icon: Activity },
     { name: "Giấc ngủ", href: "/sleep", icon: Moon },
     { name: "Buổi tập", href: "/workout", icon: Flame },
     { name: "Pin & Năng lượng", href: "/battery", icon: BatteryCharging },
-    { name: "Chat HLV AI", href: "/chat", icon: MessageSquare },
     { name: "Hồ sơ", href: "/profile", icon: User },
   ];
 
