@@ -21,7 +21,10 @@ import {
   History,
   Plus,
   X,
-  Target
+  Target,
+  Copy,
+  Check,
+  ChevronRight
 } from "lucide-react";
 
 interface ExtendedChatMessage {
@@ -45,7 +48,7 @@ export default function ChatFirstPage() {
   const [fetchingHistory, setFetchingHistory] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<{ is_fresh: boolean; message: string } | null>(null);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -54,44 +57,56 @@ export default function ChatFirstPage() {
     {
       id: "daily",
       label: "Hôm nay nên chạy bài gì?",
+      desc: "Tính Readiness & giáo án chạy",
       icon: Activity,
       color: "text-cyan-400",
+      accentBg: "bg-cyan-500/10 border-cyan-500/20",
       isAnalysis: true,
     },
     {
       id: "sleep_analysis",
       label: "Đánh giá giấc ngủ đêm qua",
+      desc: "Chi tiết Deep/REM & HRV",
       icon: Moon,
       color: "text-indigo-400",
+      accentBg: "bg-indigo-500/10 border-indigo-500/20",
       isAnalysis: true,
     },
     {
       id: "battery",
       label: "Bắt mạch Body Battery",
+      desc: "Đánh giá pin năng lượng & stress",
       icon: BatteryCharging,
       color: "text-emerald-400",
+      accentBg: "bg-emerald-500/10 border-emerald-500/20",
       isAnalysis: true,
     },
     {
       id: "workout",
       label: "Phân tích buổi tập vừa rồi",
+      desc: "Spits, HR zones & cardiac drift",
       icon: Flame,
       color: "text-orange-400",
+      accentBg: "bg-orange-500/10 border-orange-500/20",
       isAnalysis: true,
     },
     {
       id: "rhr_recovery",
       label: "Đánh giá RHR & HRV phục hồi",
+      desc: "Nhịp tim nghỉ ngơi & hồi phục",
       icon: Sparkles,
       color: "text-cyan-300",
+      accentBg: "bg-cyan-500/10 border-cyan-500/20",
       isAnalysis: false,
       text: "Đánh giá nhịp tim nghỉ ngơi (RHR) và độ phục hồi HRV của tôi đêm qua?",
     },
     {
       id: "injury_advice",
       label: "Tư vấn căng cơ & chấn thương",
+      desc: "Chăm sóc cơ bắp & hồi phục",
       icon: Bandage,
       color: "text-rose-400",
+      accentBg: "bg-rose-500/10 border-rose-500/20",
       isAnalysis: false,
       text: "Tôi bị mỏi bắp chuối sau buổi chạy hôm qua, hôm nay có nên chạy tiếp không?",
     },
@@ -100,7 +115,6 @@ export default function ChatFirstPage() {
   useEffect(() => {
     loadChatHistory();
 
-    // Lắng nghe sự kiện mở drawer và đồng bộ từ Navbar
     const handleToggleDrawer = () => setDrawerOpen((prev) => !prev);
     const handleSyncEvent = () => handleCheckSync();
 
@@ -119,10 +133,9 @@ export default function ChatFirstPage() {
 
   const handleCheckSync = async () => {
     try {
-      const res = await api.getGarminStatus();
-      setSyncStatus(res);
+      await api.getGarminStatus();
     } catch (err: any) {
-      setSyncStatus({ is_fresh: false, message: err.message || "Lỗi kiểm tra Garmin" });
+      console.warn("Garmin sync status:", err);
     }
   };
 
@@ -137,7 +150,7 @@ export default function ChatFirstPage() {
         setMessages([
           {
             role: "assistant",
-            content: `Xin chào ${user?.name || "bạn"}! 👋 Tôi là **Garmin AI Coach** của bạn.\n\nTôi có thể đọc trực tiếp các chỉ số **nhịp tim, giấc ngủ, tải tập luyện TRIMP, HRV và Body Battery** từ đồng hồ Garmin của bạn. Bạn muốn tư vấn bài chạy, kiểm tra thể trạng hay phân tích giấc ngủ hôm nay?`,
+            content: `Xin chào ${user?.name || "bạn"}! 👋 Tôi là **Garmin AI Coach** của bạn.\n\nTôi kết nối trực tiếp với đồng hồ Garmin Connect để phân tích thể trạng, giấc ngủ, tải tập luyện TRIMP và bài chạy của bạn. Chọn kịch bản nhanh bên dưới hoặc nhập câu hỏi bất kỳ để bắt đầu!`,
           },
         ]);
       }
@@ -152,7 +165,7 @@ export default function ChatFirstPage() {
     setMessages([
       {
         role: "assistant",
-        content: `Cuộc trò chuyện mới đã bắt đầu! Bạn muốn hỏi HLV AI về bài tập, giấc ngủ hay thể trạng nào hôm nay?`,
+        content: `Cuộc trò chuyện mới đã sẵn sàng! Bạn muốn HLV AI giải đáp điều gì hôm nay?`,
       },
     ]);
     setDrawerOpen(false);
@@ -215,6 +228,12 @@ export default function ChatFirstPage() {
     }
   };
 
+  const handleCopyMessage = (content: string, idx: number) => {
+    navigator.clipboard.writeText(content);
+    setCopiedIdx(idx);
+    setTimeout(() => setCopiedIdx(null), 1500);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -229,13 +248,13 @@ export default function ChatFirstPage() {
   };
 
   return (
-    <div className="flex flex-col flex-1 h-[calc(100dvh-3.25rem)] sm:h-[calc(100dvh-3.5rem)] max-w-4xl mx-auto w-full overflow-hidden bg-slate-950 sm:px-2">
+    <div className="flex flex-col flex-1 h-[calc(100dvh-3.25rem)] sm:h-[calc(100dvh-3.5rem)] max-w-4xl mx-auto w-full overflow-hidden sm:px-2">
       
-      {/* 1. Quick Action Chips Bar (Siêu gọn, cuộn ngang) */}
-      <div className="px-3 py-1.5 border-b border-slate-900 bg-slate-950/90 shrink-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+      {/* 1. Quick Action Chips Bar (Siêu mỏng, cuộn ngang) */}
+      <div className="px-3 py-1.5 border-b border-slate-900/90 bg-slate-950/80 backdrop-blur-md shrink-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
         <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1 shrink-0 pr-1">
           <Sparkles className="h-3 w-3 text-cyan-400" />
-          <span>Gợi ý:</span>
+          <span>Hỏi nhanh:</span>
         </span>
 
         {quickActionPrompts.map((act) => {
@@ -251,7 +270,7 @@ export default function ChatFirstPage() {
                 }
               }}
               disabled={loading}
-              className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full border border-slate-800 bg-slate-900/80 text-[11px] text-slate-300 hover:text-white hover:border-cyan-500/40 transition disabled:opacity-50"
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-full border border-slate-800 bg-slate-900/90 text-[11px] font-medium text-slate-200 hover:text-white hover:border-cyan-500/50 hover:bg-slate-800 transition shadow-xs disabled:opacity-50"
             >
               <Icon className={`h-3 w-3 ${act.color}`} />
               <span>{act.label}</span>
@@ -260,65 +279,95 @@ export default function ChatFirstPage() {
         })}
       </div>
 
-      {/* 2. Messages Stream (Tràn viền, thoáng đãng) */}
-      <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 space-y-3">
+      {/* 2. Messages Stream */}
+      <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 space-y-4">
         {messages.map((m, idx) => {
           const isUser = m.role === "user";
           return (
             <div
               key={idx}
-              className={`flex items-start gap-2 sm:gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"}`}
+              className={`flex items-start gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"}`}
             >
+              {/* Avatar */}
               <div
                 className={`flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-xl text-xs font-bold ${
                   isUser
-                    ? "bg-cyan-500 text-slate-950 shadow-sm"
-                    : "bg-slate-800 text-cyan-400 border border-slate-700"
+                    ? "bg-gradient-to-tr from-cyan-500 to-blue-600 text-white shadow-sm"
+                    : "bg-slate-900 text-cyan-400 border border-cyan-500/30 shadow-md shadow-cyan-950/20"
                 }`}
               >
-                {isUser ? <User className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
+                {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
               </div>
 
+              {/* Message Bubble */}
               <div
-                className={`max-w-[88%] sm:max-w-[80%] rounded-2xl p-3 sm:p-4 text-xs sm:text-sm leading-relaxed space-y-2.5 shadow-sm ${
+                className={`max-w-[90%] sm:max-w-[85%] rounded-2xl p-3.5 sm:p-4 text-xs sm:text-sm leading-relaxed space-y-2.5 shadow-md ${
                   isUser
-                    ? "bg-cyan-600 text-white rounded-tr-xs"
-                    : "bg-slate-900/90 text-slate-200 border border-slate-800/80 rounded-tl-xs"
+                    ? "bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-tr-xs shadow-cyan-600/10 font-medium"
+                    : "bg-gradient-to-b from-slate-900/95 via-slate-900/90 to-slate-950/90 text-slate-100 border border-slate-800/90 rounded-tl-xs"
                 }`}
               >
-                {/* Micro-Card Garmin nếu có metrics */}
+                {/* Assistant Identity Header */}
+                {!isUser && (
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800/60 text-[11px]">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-white tracking-tight">Garmin Coach AI</span>
+                      <span className="rounded bg-cyan-950/80 px-1.5 py-0.2 text-[9px] font-semibold text-cyan-400 border border-cyan-800/60">PRO</span>
+                    </div>
+
+                    <button
+                      onClick={() => handleCopyMessage(m.content, idx)}
+                      title="Sao chép phản hồi"
+                      className="text-slate-400 hover:text-cyan-300 text-[10px] flex items-center gap-1 transition p-1"
+                    >
+                      {copiedIdx === idx ? (
+                        <>
+                          <Check className="h-3 w-3 text-emerald-400" />
+                          <span className="text-emerald-400">Đã chép</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3 w-3" />
+                          <span>Sao chép</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* Garmin Metrics Summary Card */}
                 {m.metrics && (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2.5 rounded-xl bg-slate-950/90 border border-slate-800/80 text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2.5 rounded-xl bg-slate-950/90 border border-slate-800/90 text-xs">
                     {m.metrics.readiness_score !== undefined && m.metrics.readiness_score !== null && (
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">Sẵn sàng</span>
-                        <span className="font-bold text-amber-400">
+                      <div className="p-1.5 rounded-lg bg-slate-900/60">
+                        <span className="text-[10px] text-slate-400 block">Sẵn sàng (Readiness)</span>
+                        <span className="font-extrabold text-amber-400 text-sm">
                           {m.metrics.readiness_score}/100
                         </span>
                       </div>
                     )}
-                    <div>
-                      <span className="text-[10px] text-slate-400 block">Garmin</span>
-                      <span className={`font-semibold ${m.metrics.is_fresh ? "text-emerald-400" : "text-amber-400"}`}>
+                    <div className="p-1.5 rounded-lg bg-slate-900/60">
+                      <span className="text-[10px] text-slate-400 block">Dữ liệu Garmin</span>
+                      <span className={`font-semibold text-xs ${m.metrics.is_fresh ? "text-emerald-400" : "text-amber-400"}`}>
                         {m.metrics.is_fresh ? "Đã đồng bộ" : "Chờ đồng bộ"}
                       </span>
                     </div>
                     {m.metrics.date && (
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">Ngày</span>
-                        <span className="font-medium text-white">{m.metrics.date}</span>
+                      <div className="p-1.5 rounded-lg bg-slate-900/60">
+                        <span className="text-[10px] text-slate-400 block">Ngày phân tích</span>
+                        <span className="font-medium text-white text-xs">{m.metrics.date}</span>
                       </div>
                     )}
                     {m.mode && (
-                      <div>
+                      <div className="p-1.5 rounded-lg bg-slate-900/60">
                         <span className="text-[10px] text-slate-400 block">Chế độ</span>
-                        <span className="font-medium text-cyan-400 uppercase">{m.mode}</span>
+                        <span className="font-bold text-cyan-400 uppercase text-xs">{m.mode}</span>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* Markdown text content */}
+                {/* Markdown text content với Stat Cards & Headings */}
                 {isUser ? (
                   <div className="whitespace-pre-wrap">{m.content}</div>
                 ) : (
@@ -336,15 +385,52 @@ export default function ChatFirstPage() {
           );
         })}
 
+        {/* Starter Cards gợi ý nếu hội thoại mới bắt đầu */}
+        {messages.length <= 1 && !loading && (
+          <div className="pt-2 pb-4 space-y-3">
+            <p className="text-xs font-semibold text-slate-400 flex items-center gap-1.5 px-1">
+              <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
+              <span>Kích hoạt phân tích 1-chạm:</span>
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {quickActionPrompts.slice(0, 4).map((card) => {
+                const Icon = card.icon;
+                return (
+                  <button
+                    key={card.id}
+                    onClick={() => handleTriggerAnalysis(card.id, card.label)}
+                    className="p-3 rounded-xl border border-slate-800/80 bg-gradient-to-br from-slate-900/90 to-slate-950/80 hover:border-cyan-500/40 hover:from-slate-900 hover:to-slate-900 transition flex items-center justify-between gap-3 text-left shadow-sm group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-xl border ${card.accentBg} ${card.color} shrink-0 group-hover:scale-105 transition-transform`}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-white group-hover:text-cyan-300 transition-colors">
+                          {card.label}
+                        </h4>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          {card.desc}
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-slate-600 group-hover:text-cyan-400 transition-colors shrink-0" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Loading Indicator */}
         {loading && (
-          <div className="flex items-start gap-2 sm:gap-2.5">
-            <div className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-xl bg-slate-800 text-cyan-400 border border-slate-700">
-              <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+          <div className="flex items-start gap-2.5">
+            <div className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-cyan-400 border border-slate-700">
+              <Bot className="h-4 w-4" />
             </div>
-            <div className="rounded-2xl rounded-tl-xs border border-slate-800 bg-slate-900/90 p-3 sm:p-3.5 text-xs text-slate-300 flex items-center gap-2 shadow-sm">
+            <div className="rounded-2xl rounded-tl-xs border border-cyan-500/30 bg-slate-900/90 p-3 sm:p-4 text-xs text-slate-300 flex items-center gap-2.5 shadow-md">
               <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
-              <span>HLV AI đang tra cứu Garmin và phân tích...</span>
+              <span>HLV AI đang tra cứu dữ liệu Garmin và tổng hợp phân tích...</span>
             </div>
           </div>
         )}
@@ -365,9 +451,9 @@ export default function ChatFirstPage() {
         </div>
       )}
 
-      {/* 3. Bottom Input Bar (Dính sát đáy, gọn gàng) */}
-      <div className="p-2 sm:p-2.5 border-t border-slate-900 bg-slate-950/95 shrink-0 z-20">
-        <div className="flex items-end gap-1.5 bg-slate-900/90 border border-slate-800 rounded-2xl px-3 py-1.5 focus-within:border-cyan-500 transition shadow-lg">
+      {/* 3. Bottom Input Bar (Floating Capsule dính đáy) */}
+      <div className="p-2 sm:p-3 border-t border-slate-900/90 bg-slate-950/95 backdrop-blur-md shrink-0 z-20">
+        <div className="flex items-end gap-2 bg-slate-900/90 border border-slate-800/90 rounded-2xl px-3 py-1.5 focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500/30 transition shadow-xl">
           <textarea
             ref={textareaRef}
             value={input}
@@ -375,20 +461,20 @@ export default function ChatFirstPage() {
             onKeyDown={handleKeyDown}
             placeholder="Hỏi HLV AI điều gì đó..."
             rows={1}
-            className="w-full resize-none bg-transparent py-1 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none max-h-24"
+            className="w-full resize-none bg-transparent py-1.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none max-h-28"
           />
 
           <button
             onClick={() => handleSend()}
             disabled={!input.trim() || loading}
-            className="flex h-8 w-8 items-center justify-center rounded-xl bg-cyan-500 text-slate-950 hover:bg-cyan-400 disabled:opacity-30 transition shadow-sm shrink-0 mb-0.5"
+            className="flex h-8.5 w-8.5 items-center justify-center rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 text-slate-950 hover:opacity-90 disabled:opacity-30 transition shadow-md shadow-cyan-500/20 shrink-0 mb-0.5"
             title="Gửi câu hỏi"
           >
-            <Send className="h-3.5 w-3.5" />
+            <Send className="h-4 w-4 fill-slate-950 text-slate-950" />
           </button>
         </div>
 
-        <p className="hidden sm:block text-[10px] text-slate-500 text-center mt-1">
+        <p className="hidden sm:block text-[10px] text-slate-500 text-center mt-1.5">
           HLV AI tự động tra cứu dữ liệu nhịp tim, HRV, giấc ngủ thời gian thực từ Garmin Connect.
         </p>
       </div>
@@ -416,7 +502,7 @@ export default function ChatFirstPage() {
 
             <button
               onClick={handleNewChat}
-              className="flex items-center justify-center gap-1.5 w-full py-2 px-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs mb-3 transition shadow-sm"
+              className="flex items-center justify-center gap-1.5 w-full py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 text-slate-950 font-bold text-xs mb-3 transition shadow-sm"
             >
               <Plus className="h-3.5 w-3.5" />
               <span>Cuộc trò chuyện mới</span>

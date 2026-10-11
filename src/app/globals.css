@@ -14,7 +14,8 @@
 
 body {
   color: var(--foreground);
-  background: var(--background);
+  background: radial-gradient(circle at 50% 0%, #0d1627 0%, #080c14 60%, #05080f 100%);
+  background-attachment: fixed;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   min-height: 100vh;
 }
