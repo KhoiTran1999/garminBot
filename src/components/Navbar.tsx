@@ -45,16 +45,16 @@ export const Navbar: React.FC = () => {
   };
 
   return (
-    <nav className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/90 backdrop-blur-md">
-      <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
-        <div className="flex h-13 sm:h-14 items-center justify-between gap-2">
+    <nav className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/95 backdrop-blur-md">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex h-15 sm:h-16 items-center justify-between gap-3">
           {/* Logo & History toggle on Chat */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3">
             {isChatPage && (
               <button
                 onClick={() => window.dispatchEvent(new CustomEvent("toggle-chat-history"))}
                 title="Lịch sử hội thoại"
-                className="p-1.5 rounded-lg border border-slate-800 bg-slate-900/90 text-cyan-400 hover:text-white hover:bg-slate-800 transition"
+                className="p-2 rounded-xl border border-slate-800 bg-slate-900/90 text-cyan-400 hover:text-white hover:bg-slate-800 transition shadow-xs"
               >
                 <History className="h-4 w-4" />
               </button>
@@ -103,9 +103,9 @@ export const Navbar: React.FC = () => {
               <button
                 onClick={handleSyncClick}
                 title="Kiểm tra đồng bộ Garmin"
-                className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-slate-800/80 bg-slate-900/60 hover:bg-slate-800 text-[11px] text-slate-300 hover:text-white transition"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-800 text-[11px] text-slate-300 hover:text-white transition"
               >
-                <RefreshCw className={`h-3 w-3 text-cyan-400 ${syncing ? "animate-spin" : ""}`} />
+                <RefreshCw className={`h-3.5 w-3.5 text-cyan-400 ${syncing ? "animate-spin" : ""}`} />
                 <span className="hidden md:inline">Đồng bộ</span>
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
               </button>
@@ -115,7 +115,7 @@ export const Navbar: React.FC = () => {
             <button
               onClick={() => window.dispatchEvent(new CustomEvent("open-pwa-install"))}
               title="Cài đặt App vào điện thoại / máy tính"
-              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-cyan-500/30 bg-cyan-950/40 text-cyan-300 hover:text-white hover:bg-cyan-900/50 text-xs font-medium transition shadow-sm"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-cyan-500/30 bg-cyan-950/40 text-cyan-300 hover:text-white hover:bg-cyan-900/50 text-xs font-medium transition shadow-sm"
             >
               <Download className="h-3.5 w-3.5" />
               <span>Cài đặt App</span>
@@ -130,7 +130,7 @@ export const Navbar: React.FC = () => {
                 <button
                   onClick={logout}
                   title="Đăng xuất"
-                  className="rounded-lg p-1.5 text-slate-400 hover:bg-red-950/40 hover:text-red-400 border border-slate-800 transition-colors"
+                  className="rounded-lg p-2 text-slate-400 hover:bg-red-950/40 hover:text-red-400 border border-slate-800 transition-colors"
                 >
                   <LogOut className="h-3.5 w-3.5" />
                 </button>
@@ -141,7 +141,7 @@ export const Navbar: React.FC = () => {
             <div className="flex lg:hidden">
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-900 hover:text-white"
+                className="rounded-xl p-2 text-slate-400 hover:bg-slate-900 hover:text-white border border-slate-800/80 transition"
                 title="Menu"
               >
                 {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}

@@ -246,13 +246,13 @@ export default function ChatFirstPage() {
   };
 
   return (
-    <div className="flex flex-col flex-1 h-[calc(100dvh-3.25rem)] sm:h-[calc(100dvh-3.5rem)] max-w-3xl mx-auto w-full overflow-hidden">
+    <div className="flex flex-col flex-1 h-[calc(100dvh-3.75rem)] sm:h-[calc(100dvh-4rem)] max-w-3xl mx-auto w-full overflow-hidden">
       
       {/* KHUNG CHAT: Nếu chưa có tin nhắn, hiển thị màn hình New Chat tinh gọn */}
       {messages.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 text-center overflow-y-auto">
+        <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 py-6 sm:py-8 text-center overflow-y-auto w-full">
           {/* Logo & Lời chào nhẹ nhàng */}
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/20 mb-3">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/20 mb-3.5">
             <Activity className="h-6 w-6" />
           </div>
 
@@ -264,7 +264,7 @@ export default function ChatFirstPage() {
           </p>
 
           {/* 4 Gợi ý kịch bản 1-chạm (Bố cục phẳng, thoáng mắt) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-lg text-left mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-md text-left mb-4">
             {quickActionPrompts.slice(0, 4).map((p) => {
               const Icon = p.icon;
               return (
@@ -272,10 +272,10 @@ export default function ChatFirstPage() {
                   key={p.id}
                   onClick={() => handleTriggerAnalysis(p.id, p.label)}
                   disabled={loading}
-                  className="p-3 rounded-xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900 hover:border-cyan-500/40 transition flex items-center justify-between gap-3 group text-left"
+                  className="p-3.5 rounded-2xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900 hover:border-cyan-500/40 transition flex items-center justify-between gap-3 group text-left active:scale-[0.98]"
                 >
                   <div className="flex items-center gap-2.5">
-                    <div className="p-2 rounded-lg bg-slate-950 border border-slate-800 shrink-0">
+                    <div className="p-2 rounded-xl bg-slate-950 border border-slate-800 shrink-0">
                       <Icon className={`h-4 w-4 ${p.color}`} />
                     </div>
                     <div>
@@ -295,7 +295,7 @@ export default function ChatFirstPage() {
           {historyList.length > 0 && (
             <button
               onClick={() => setDrawerOpen(true)}
-              className="text-[11px] text-slate-400 hover:text-cyan-300 flex items-center gap-1.5 transition py-1"
+              className="text-[11px] text-slate-400 hover:text-cyan-300 flex items-center gap-1.5 transition py-1.5 px-3 rounded-lg hover:bg-slate-900/50"
             >
               <History className="h-3.5 w-3.5" />
               <span>Xem lại {historyList.length} câu hỏi trong lịch sử</span>
@@ -304,7 +304,7 @@ export default function ChatFirstPage() {
         </div>
       ) : (
         /* DÒNG HỘI THOẠI KHI ĐANG CHAT */
-        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
           {messages.map((m, idx) => {
             const isUser = m.role === "user";
             return (
@@ -428,7 +428,7 @@ export default function ChatFirstPage() {
 
       {/* Thông báo lỗi */}
       {error && (
-        <div className="mx-3 mb-2 p-2.5 rounded-xl border border-red-800 bg-red-950/60 text-xs text-red-300 flex items-center justify-between gap-2 shrink-0">
+        <div className="mx-4 sm:mx-6 mb-2 p-2.5 rounded-xl border border-red-800 bg-red-950/60 text-xs text-red-300 flex items-center justify-between gap-2 shrink-0">
           <div className="flex items-center gap-1.5">
             <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
             <span>{error}</span>
@@ -439,9 +439,9 @@ export default function ChatFirstPage() {
         </div>
       )}
 
-      {/* Ô NHẬP LIỆU DÍNH ĐÁY */}
-      <div className="p-2.5 sm:p-3 border-t border-slate-900 bg-slate-950/95 shrink-0 z-20">
-        <div className="flex items-end gap-2 bg-slate-900/90 border border-slate-800 rounded-2xl px-3 py-1.5 focus-within:border-cyan-500 transition shadow-lg">
+      {/* Ô NHẬP LIỆU DÍNH ĐÁY (Đệm đáy an toàn trên điện thoại) */}
+      <div className="px-4 sm:px-6 pt-2 pb-5 sm:pb-3 border-t border-slate-900/90 bg-slate-950/95 backdrop-blur-md shrink-0 z-20">
+        <div className="flex items-end gap-2 bg-slate-900/90 border border-slate-800 rounded-2xl px-3.5 py-1.5 focus-within:border-cyan-500 transition shadow-lg">
           <textarea
             ref={textareaRef}
             value={input}
