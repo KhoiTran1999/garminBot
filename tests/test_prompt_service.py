@@ -6,7 +6,7 @@ Tests for get_prompts_from_notion() focusing on:
 from unittest.mock import patch, MagicMock
 import pytest
 
-from app.services.prompt_service import get_prompts_from_notion
+from backend.services.prompt_service import get_prompts_from_notion
 
 
 def _make_notion_response(rows: list[dict]) -> dict:
@@ -52,8 +52,8 @@ class TestMissingAskHelp:
             {"name": "workout_analysis", "active": True},
             {"name": "battery_analysis", "active": True},
         ])
-        with patch("app.services.prompt_service.Config") as mock_cfg, \
-             patch("app.services.prompt_service.httpx.Client") as mock_cls:
+        with patch("backend.services.prompt_service.Config") as mock_cfg, \
+             patch("backend.services.prompt_service.httpx.Client") as mock_cls:
             mock_cfg.NOTION_TOKEN = "fake-token"
             mock_cfg.NOTION_PROMPT_DATABASE_ID = "fake-db-id"
             mock_cfg.ROUTER9_COMBOS_MODEL = "gemini-pro"
@@ -68,8 +68,8 @@ class TestMissingAskHelp:
     def test_empty_db_returns_no_prompts(self):
         """DB has zero rows → empty dict."""
         data = _make_notion_response([])
-        with patch("app.services.prompt_service.Config") as mock_cfg, \
-             patch("app.services.prompt_service.httpx.Client") as mock_cls:
+        with patch("backend.services.prompt_service.Config") as mock_cfg, \
+             patch("backend.services.prompt_service.httpx.Client") as mock_cls:
             mock_cfg.NOTION_TOKEN = "fake-token"
             mock_cfg.NOTION_PROMPT_DATABASE_ID = "fake-db-id"
             mock_cfg.ROUTER9_COMBOS_MODEL = "gemini-pro"
@@ -98,8 +98,8 @@ class TestKeyNormalization:
         data = _make_notion_response([
             {"name": raw_name, "system_prompt": "sys", "user_template": "usr", "active": True}
         ])
-        with patch("app.services.prompt_service.Config") as mock_cfg, \
-             patch("app.services.prompt_service.httpx.Client") as mock_cls:
+        with patch("backend.services.prompt_service.Config") as mock_cfg, \
+             patch("backend.services.prompt_service.httpx.Client") as mock_cls:
             mock_cfg.NOTION_TOKEN = "fake-token"
             mock_cfg.NOTION_PROMPT_DATABASE_ID = "fake-db-id"
             mock_cfg.ROUTER9_COMBOS_MODEL = "gemini-pro"
@@ -116,8 +116,8 @@ class TestKeyNormalization:
         data = _make_notion_response([
             {"name": "ask  help", "active": True}
         ])
-        with patch("app.services.prompt_service.Config") as mock_cfg, \
-             patch("app.services.prompt_service.httpx.Client") as mock_cls:
+        with patch("backend.services.prompt_service.Config") as mock_cfg, \
+             patch("backend.services.prompt_service.httpx.Client") as mock_cls:
             mock_cfg.NOTION_TOKEN = "fake-token"
             mock_cfg.NOTION_PROMPT_DATABASE_ID = "fake-db-id"
             mock_cfg.ROUTER9_COMBOS_MODEL = "gemini-pro"
@@ -138,8 +138,8 @@ class TestActiveFilter:
         data = _make_notion_response([
             {"name": "ask_help", "active": False}
         ])
-        with patch("app.services.prompt_service.Config") as mock_cfg, \
-             patch("app.services.prompt_service.httpx.Client") as mock_cls:
+        with patch("backend.services.prompt_service.Config") as mock_cfg, \
+             patch("backend.services.prompt_service.httpx.Client") as mock_cls:
             mock_cfg.NOTION_TOKEN = "fake-token"
             mock_cfg.NOTION_PROMPT_DATABASE_ID = "fake-db-id"
             mock_cfg.ROUTER9_COMBOS_MODEL = "gemini-pro"
@@ -154,8 +154,8 @@ class TestActiveFilter:
         data = _make_notion_response([
             {"name": "ask_help", "system_prompt": "Help sys", "user_template": "Help usr", "active": True}
         ])
-        with patch("app.services.prompt_service.Config") as mock_cfg, \
-             patch("app.services.prompt_service.httpx.Client") as mock_cls:
+        with patch("backend.services.prompt_service.Config") as mock_cfg, \
+             patch("backend.services.prompt_service.httpx.Client") as mock_cls:
             mock_cfg.NOTION_TOKEN = "fake-token"
             mock_cfg.NOTION_PROMPT_DATABASE_ID = "fake-db-id"
             mock_cfg.ROUTER9_COMBOS_MODEL = "gemini-pro"

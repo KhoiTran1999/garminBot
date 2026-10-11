@@ -7,4 +7,9 @@ __pycache__/
 .pytest_cache/
 *.log
 voice_*.wav
+*.wav
 .claude/
+node_modules/
+.next/
+/public/audio/
+*.tsbuildinfo

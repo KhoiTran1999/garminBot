@@ -1,19 +1,19 @@
 import json
 from unittest.mock import patch, MagicMock, AsyncMock
 import pytest
-from app.services.ai_service import process_data_with_worker, execute_garmin_tool
+from backend.services.ai_service import process_data_with_worker, execute_garmin_tool
 
 @pytest.mark.asyncio
 async def test_process_data_with_worker_with_task():
     # Mock call_ai_api_raw_async
-    with patch("app.services.ai_service.call_ai_api_raw_async", new_callable=AsyncMock) as mock_call:
+    with patch("backend.services.ai_service.call_ai_api_raw_async", new_callable=AsyncMock) as mock_call:
         mock_response = MagicMock()
         mock_response.content = "processed result by AI"
         mock_call.return_value = mock_response
 
         tool_args = {"date": "2026-07-07", "task": "Hãy lấy khoảng thời gian Body battery tăng nhanh nhất"}
 
-        with patch("app.services.ai_service.Config") as mock_cfg:
+        with patch("backend.services.ai_service.Config") as mock_cfg:
             mock_cfg.ROUTER9_API_KEY = "fake-key"
             mock_cfg.MODEL_WORKER = "gemini-worker"
 
@@ -32,14 +32,14 @@ async def test_process_data_with_worker_with_task():
 @pytest.mark.asyncio
 async def test_process_data_with_worker_without_task():
     # Mock call_ai_api_raw_async
-    with patch("app.services.ai_service.call_ai_api_raw_async", new_callable=AsyncMock) as mock_call:
+    with patch("backend.services.ai_service.call_ai_api_raw_async", new_callable=AsyncMock) as mock_call:
         mock_response = MagicMock()
         mock_response.content = "processed result by AI"
         mock_call.return_value = mock_response
 
         tool_args = {"date": "2026-07-07"}
 
-        with patch("app.services.ai_service.Config") as mock_cfg:
+        with patch("backend.services.ai_service.Config") as mock_cfg:
             mock_cfg.ROUTER9_API_KEY = "fake-key"
             mock_cfg.MODEL_WORKER = "gemini-worker"
 
@@ -78,15 +78,15 @@ def test_execute_garmin_tool_get_body_battery_trend():
     assert "body_battery_readings" in res
     assert "fastest_charging_period" not in res  # Verifies we reverted Python calculation
 
-@patch("app.services.ai_service.call_ai_api")
-@patch("app.services.ai_service.redis_service")
-@patch("app.services.ai_service.Config")
+@patch("backend.services.ai_service.call_ai_api")
+@patch("backend.services.ai_service.redis_service")
+@patch("backend.services.ai_service.Config")
 def test_get_ai_advice_user_note(mock_cfg, mock_redis, mock_call):
     mock_cfg.ROUTER9_API_KEY = "fake-key"
     mock_cfg.MODEL_WORKER = "fake-model"
     mock_redis.get_ai_context.return_value = []
 
-    from app.services.ai_service import get_ai_advice
+    from backend.services.ai_service import get_ai_advice
 
     user_config = {"name": "Test User", "email": "test@test.com", "goal": "Running", "injury": "None", "note": "None"}
     r_data = {"nap_seconds": 0, "avg_spo2": 98, "min_spo2": 95, "last_spo2": 97,
@@ -147,15 +147,15 @@ def test_get_ai_advice_user_note(mock_cfg, mock_redis, mock_call):
     prompt_sent = args[2]
     assert "Ghi chú hôm nay từ người dùng:** thức tới 2h sáng" in prompt_sent
 
-@patch("app.services.ai_service.call_ai_api")
-@patch("app.services.ai_service.redis_service")
-@patch("app.services.ai_service.Config")
+@patch("backend.services.ai_service.call_ai_api")
+@patch("backend.services.ai_service.redis_service")
+@patch("backend.services.ai_service.Config")
 def test_get_workout_and_battery_user_note(mock_cfg, mock_redis, mock_call):
     mock_cfg.ROUTER9_API_KEY = "fake-key"
     mock_cfg.MODEL_WORKER = "fake-model"
     mock_redis.get_ai_context.return_value = []
 
-    from app.services.ai_service import get_workout_analysis_advice, get_battery_analysis_advice
+    from backend.services.ai_service import get_workout_analysis_advice, get_battery_analysis_advice
 
     user_config = {"name": "Test User", "email": "test@test.com", "goal": "Running"}
 
@@ -204,7 +204,7 @@ def test_execute_garmin_tool_get_custom_training_readiness():
         "avg_daily_load": 150
     }
 
-    with patch("app.services.garmin_service.get_processed_data", return_value=(mock_r_data, mock_r_score, mock_l_data)) as mock_gpd:
+    with patch("backend.services.garmin_service.get_processed_data", return_value=(mock_r_data, mock_r_score, mock_l_data)) as mock_gpd:
         args = {"date": "2026-07-08"}
         res_str = execute_garmin_tool(client, "get_custom_training_readiness", args, user_label="Test User")
 
@@ -250,7 +250,7 @@ def test_execute_garmin_tool_get_training_readiness_fallback():
     mock_r_score = 95
     mock_l_data = {}
 
-    with patch("app.services.garmin_service.get_processed_data", return_value=(mock_r_data, mock_r_score, mock_l_data)) as mock_gpd:
+    with patch("backend.services.garmin_service.get_processed_data", return_value=(mock_r_data, mock_r_score, mock_l_data)) as mock_gpd:
         args = {"date": "2026-07-08"}
         res_str = execute_garmin_tool(client, "get_training_readiness", args, user_label="Test User")
 

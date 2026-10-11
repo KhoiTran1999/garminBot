@@ -1,9 +1,9 @@
 import os
 import asyncio
 from datetime import date
-from app.services.redis_service import redis_service
-from app.services.ai_service import get_ai_advice
-from app.config import Config
+from backend.services.redis_service import redis_service
+from backend.services.ai_service import get_ai_advice
+from backend.config import Config
 
 async def test_all():
     print("=== START TESTING REDIS INTEGRATION ===")

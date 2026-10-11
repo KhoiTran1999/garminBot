@@ -1,114 +1,97 @@
-# 🏃‍♂️ Garmin AI Coach Pro (Notion Integrated)
+# 🏃‍♂️ Garmin AI Coach Pro (Web Dashboard & Vercel Deployed)
 
-**Trợ lý ảo Huấn luyện viên chạy bộ cá nhân hóa, sử dụng dữ liệu Garmin, Google Gemini AI và quản lý qua Notion.**
+**Trợ lý ảo Huấn luyện viên chạy bộ cá nhân hóa, sử dụng dữ liệu Garmin Connect, Google Gemini AI, quản lý ngữ cảnh qua Notion và hiển thị trực quan trên Website Vercel.**
 
-Dự án này tự động hóa quy trình thu thập dữ liệu sức khỏe từ Garmin Connect, tính toán các chỉ số chuyên sâu (Training Readiness, TRIMP), kết hợp với **ngữ cảnh cá nhân từ Notion** (Mục tiêu, Chấn thương) để đưa ra lời khuyên tập luyện hàng ngày qua Telegram.
+Dự án này tự động hóa quy trình thu thập dữ liệu sức khỏe từ Garmin Connect, tính toán các chỉ số chuyên sâu (Training Readiness, TRIMP Banister, Acute Load), kết hợp với **ngữ cảnh cá nhân từ Notion** (Mục tiêu, Chấn thương) để đưa ra giáo án tập luyện, phân tích chuyên sâu và bản thu âm giọng nói (Voice Coach) trên giao diện Web hiện đại.
+
+---
 
 ## ✨ Tính năng nổi bật
 
-* **⚡ On-Demand Trigger (Mới):**
-    * Tích hợp Telegram Bot với nút bấm điều khiển (Dashboard) trực quan.
-    * Chat lệnh trực tiếp trên Telegram để kích hoạt phân tích ngay lập tức (`/daily`, `/sleep`, `/workout`, `/battery`).
-    * Sử dụng **Cloudflare Workers** (Serverless) làm cầu nối Webhook siêu tốc, định tuyến lệnh gọi tới GitHub Actions, không cần treo máy tính 24/7.
+* **🌐 Web Dashboard Hiện đại (Mới trên Vercel):**
+    * Giao diện thể thao tối ưu cho cả Điện thoại & Máy tính (Next.js 15, Tailwind CSS, Lucide Icons).
+    * Đăng nhập độc lập an toàn bằng Email & Mật khẩu đồng bộ với danh sách vận động viên trên Notion.
+    * Kích hoạt phân tích tức thì 1-chạm:
+        * 📊 **Sức khỏe & Đề xuất tập (Daily):** Tính điểm sẵn sàng, tải 7 ngày, AQI và bài chạy hôm nay.
+        * 💤 **Phân tích Giấc ngủ (Sleep):** Mổ xẻ chi tiết 3 pha ngủ (Deep, Light, REM), RHR, SpO2.
+        * 🏃 **Phân tích Bài tập (Workout):** Splits theo km, phân bổ vùng nhịp tim, Cardiac Drift.
+        * 🔋 **Bắt mạch Năng lượng (Battery):** Body Battery & Stress rút gọn 2h/block.
+    * 🎙️ **Trình phát âm thanh Voice Coach:** Nghe trực tiếp bản thu âm AI giọng đọc huấn luyện viên trên web.
+    * 💬 **Phòng Chat AI Coach 2 chiều:** Trò chuyện hỏi đáp với HLV, tự động tra cứu dữ liệu sức khỏe Garmin qua Tool Calling.
+    * 📝 **Hồ sơ Vận động viên:** Chỉnh sửa Mục tiêu chạy bộ & Chấn thương, đồng bộ 2 chiều tức thì lên Notion Database.
 
-* **🧠 Notion Database Integration:**
-    * Quản lý danh sách người dùng, mật khẩu và trạng thái Active trực quan trên Notion.
-    * Quản lý **System Prompts** cho AI ngay trên Notion.
-    * **Cá nhân hóa theo thời gian thực:** Cập nhật "Mục tiêu" hoặc "Tình trạng chấn thương" trên Notion, AI sẽ tự động điều chỉnh giáo án ngay lập tức.
+* **☁️ Triển khai Serverless Toàn diện trên Vercel:**
+    * Chạy toàn bộ Next.js Frontend và Python FastAPI Serverless Backend (`api/index.py`) trên cùng một dự án Vercel.
+    * Cấu hình mở rộng `maxDuration: 60` trong `vercel.json`.
 
-* **📊 Phân tích Dữ liệu Chuyên sâu:**
-    * **Giấc ngủ:** Phân tích chi tiết 3 giai đoạn (Deep, Light, REM) và thời gian ngủ thực tế (trừ lúc tỉnh giấc).
-    * **Training Readiness:** Tính điểm sẵn sàng dựa trên Pin cơ thể (Body Battery), Stress và Giấc ngủ.
-    * **Acute Training Load (7 ngày):** Tính toán tải tập luyện dựa trên nhịp tim (TRIMP Banister).
-    * **Chất lượng không khí (AQI):** Tích hợp thông tin thời tiết vào lời khuyên chạy bộ.
+* **📲 Kênh Thông báo Tùy chọn qua Telegram:**
+    * Vẫn duy trì khả năng nhận báo cáo đẩy tự động hàng ngày qua Telegram Bot (GitHub Actions CRON).
 
-* **🤖 AI Coach (9Router/Gemini):** 
-    * Sử dụng endpoint 9Router tuỳ chỉnh (với model `gemini-3.1-pro`).
-    * Đóng vai HLV chuyên nghiệp, đưa ra bài tập cụ thể (Pace, Thời gian) dựa trên thể trạng thực tế.
-    * Tự động tạo **Voice Script** (Text-to-Speech) để gửi lời nhắn động viên bằng giọng nói qua Telegram.
-    * Hiển thị trạng thái phân tích theo thời gian thực ("Đang lấy báo cáo...", "Đang tạo bản thu âm...").
-
-* **☁️ Tự động hóa 100%:** Chạy hoàn toàn miễn phí trên nền tảng GitHub Actions (CRON) và Cloudflare Workers.
+---
 
 ## 🛠️ Yêu cầu chuẩn bị
 
-Để chạy dự án, bạn cần:
+1. **Tài khoản Garmin Connect:** Email và Mật khẩu.
+2. **Google Gemini API Key** hoặc **9Router API Key** (cho LLM & TTS).
+3. **Notion Integration:**
+    * Database User: `NOTION_DATABASE_ID` (gồm các cột: Name, Email, Password, Active, Training Goal, Chấn thương & Bệnh tật, Ghi chú, Telegram Chat ID).
+    * Database Prompt: `NOTION_PROMPT_DATABASE_ID`.
+    * `NOTION_TOKEN`.
+4. **Redis:** (Upstash hoặc Redis Cloud) để lưu lịch sử chat, cache báo cáo và rate limit.
+5. **Tài khoản Vercel:** Để deploy Website.
 
-1.  **Tài khoản Garmin Connect:** Email và Mật khẩu.
-2.  **9Router API Key:** Lấy key 9Router (hoặc sử dụng server riêng).
-3.  **Telegram Bot:** Token và Chat ID (lấy từ @BotFather và @userinfobot).
-4.  **Notion Integration:**
-    * Tạo Database trên Notion.
-    * Lấy `NOTION_TOKEN`, `NOTION_DATABASE_ID` (User DB) và `NOTION_PROMPT_DATABASE_ID` (Prompt DB).
-5.  **Cloudflare Account (Free):** Tạo Worker làm Webhook Trigger.
-6.  **GitHub Account:** Để lưu trữ mã nguồn và chạy Actions.
+---
 
-## 🗂️ Cấu trúc Database trên Notion (User)
+## 🚀 Chạy Thử nghiệm (Local Development)
 
-Bạn cần tạo một Database trên Notion với các cột chính xác như sau để Code hoạt động:
+### 1. Cài đặt Dependencies:
+```bash
+# Cài đặt Python packages (FastAPI, Garmin, Gemini, etc.)
+pip install -r requirements.txt
 
-| Tên Cột (Property)          | Loại (Type) | Mô tả                                                 |
-| --------------------------- | ----------- | ----------------------------------------------------- |
-| **Name** | Title       | Tên hiển thị của VĐV.                                 |
-| **Email** | Email       | Email đăng nhập Garmin.                               |
-| **Password** | Text        | Mật khẩu Garmin (Có thể dùng token GitHub Secret).    |
-| **Telegram Chat ID** | Text        | ID chat Telegram (Dạng Text để tránh lỗi format số).  |
-| **Training Goal** | Text        | VD: "Marathon Sub 4", "Chạy dưỡng sinh".              |
-| **Chấn thương & Bệnh tật** | Text        | VD: "Đau gối phải", "Đang ốm".                        |
-| **Ghi chú** | Text        | Ghi chú thêm cho AI.                                  |
-| **Active** | Checkbox    | Tick ✅ để bật Bot cho user này.                        |
+# Cài đặt Node.js packages (Next.js, Tailwind, etc.)
+npm install
+```
 
-> **Lưu ý:** Sau khi tạo Database, hãy nhớ cấp quyền cho Bot truy cập bằng cách bấm vào `...` > `Connections` > `Connect to` > Chọn Integration của bạn.
+### 2. Cấu hình biến môi trường (`.env`):
+```env
+# Notion
+NOTION_TOKEN="secret_xxx"
+NOTION_DATABASE_ID="xxx"
+NOTION_PROMPT_DATABASE_ID="xxx"
 
-## 🚀 Cài đặt & Chạy (Local)
+# AI
+GEMINI_API_KEY="xxx"
+ROUTER9_API_KEY="xxx"
 
-1.  **Clone repository:**
-    ```bash
-    git clone https://github.com/khoitran1999/garminbot.git
-    cd garminbot
-    ```
+# Redis & JWT
+REDIS_URL="rediss://default:xxx@host:port"
+JWT_SECRET="your-super-secret-jwt-key"
+```
 
-2.  **Cài đặt thư viện:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+### 3. Khởi chạy song song Frontend & Backend:
+- **Terminal 1 (Python FastAPI Backend):**
+  ```bash
+  uvicorn api.index:app --reload --port 8000
+  ```
+- **Terminal 2 (Next.js Frontend):**
+  ```bash
+  npm run dev
+  ```
+- Mở trình duyệt và truy cập `http://localhost:3000` để trải nghiệm!
 
-3.  **Cấu hình biến môi trường (`.env`):**
-    ```env
-    TELEGRAM_TOKEN="your_tele_token"
-    ROUTER9_API_KEY="your_router9_key"
-    NOTION_TOKEN="secret_your_notion_token"
-    NOTION_DATABASE_ID="your_database_id"
-    NOTION_PROMPT_DATABASE_ID="your_prompt_database_id"
-    ```
+---
 
-4.  **Chạy thử nghiệm:**
-    * Báo cáo hàng ngày: `python main.py --mode daily`
-    * Phân tích giấc ngủ: `python main.py --mode sleep_analysis`
-    * Phân tích bài tập: `python main.py --mode workout`
-    * Bắt mạch năng lượng: `python main.py --mode battery`
+## 🚀 Triển khai (Deploy) lên Vercel
 
-## ⚙️ Triển khai trên GitHub Actions & Cloudflare Workers
-
-Hệ thống hoạt động theo luồng: **Telegram -> Cloudflare Worker -> GitHub Actions -> Telegram**.
-
-### Bước 1: Thiết lập GitHub Actions
-1. Fork dự án về GitHub.
-2. Vào **Settings** > **Secrets and variables** > **Actions** thêm các Secret từ file `.env` (Bao gồm cả token Garmin nếu dùng cache: `GARMINTOKENS_EMAIL_GMAIL_COM`).
-3. Đảm bảo file `.github/workflows/telegram_trigger.yml` đang bật.
-
-### Bước 2: Thiết lập Cloudflare Worker (Webhook)
-1. Đăng nhập Cloudflare > **Workers & Pages** > **Create Worker**.
-2. Dán nội dung file `cloudflare_worker.js` vào trình soạn thảo.
-3. Vào **Settings** > **Variables and Secrets**, thêm:
-    * `GITHUB_TOKEN`: Token truy cập GitHub (Classic) có quyền `repo`.
-    * `TG_BOT_TOKEN`: Token Telegram Bot.
-    * `NOTION_TOKEN`, `NOTION_DATABASE_ID`: Để Worker xác thực User ngay lúc chat.
-    * `GITHUB_OWNER`, `GITHUB_REPO`: Thông tin kho lưu trữ GitHub của bạn.
-4. Triển khai (Deploy) Worker và copy đường dẫn `*.workers.dev`.
-
-### Bước 3: Đăng ký Webhook với Telegram
-Mở trình duyệt và truy cập URL sau (Thay `BOT_TOKEN` và `WORKER_URL`):
-`https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=<WORKER_URL>`
-
-Xong! Mở Telegram, chat `/start` với Bot và tận hưởng!
+1. **Đẩy mã nguồn lên GitHub.**
+2. Truy cập [vercel.com](https://vercel.com) > **Add New Project** > Chọn kho lưu trữ `garminBot`.
+3. Trong mục **Environment Variables**, cấu hình các biến từ file `.env`:
+   - `NOTION_TOKEN`
+   - `NOTION_DATABASE_ID`
+   - `NOTION_PROMPT_DATABASE_ID`
+   - `GEMINI_API_KEY` (và `GEMINI_API_KEY_1`, `2`, `3` nếu có)
+   - `ROUTER9_API_KEY`
+   - `REDIS_URL`
+   - `JWT_SECRET`
+4. Bấm **Deploy**. Vercel sẽ tự động build ứng dụng Next.js và triển khai Python serverless function tại `/api`!

@@ -11,16 +11,16 @@ from garminconnect import Garmin
 logging.getLogger("garminconnect").setLevel(logging.CRITICAL)
 
 # Import Services
-from app.services.notion_service import get_users_from_notion
-from app.services.garmin_service import get_processed_data, fetch_daily_activities_detailed, check_garmin_sync_status
-from app.services.ai_service import get_ai_advice, get_workout_analysis_advice, get_battery_analysis_advice, get_speech_script, generate_audio_from_text, get_customer_service_advice
-from app.services.prompt_service import get_prompts_from_notion
-from app.services.telegram_service import send_telegram_report, send_error_alert, send_progress_update
-from app.services.weather_service import WeatherService
-from app.services.redis_service import redis_service
+from backend.services.notion_service import get_users_from_notion
+from backend.services.garmin_service import get_processed_data, fetch_daily_activities_detailed, check_garmin_sync_status
+from backend.services.ai_service import get_ai_advice, get_workout_analysis_advice, get_battery_analysis_advice, get_speech_script, generate_audio_from_text, get_customer_service_advice
+from backend.services.prompt_service import get_prompts_from_notion
+from backend.services.telegram_service import send_telegram_report, send_error_alert, send_progress_update
+from backend.services.weather_service import WeatherService
+from backend.services.redis_service import redis_service
 
 # --- CẤU HÌNH CHUNG ---
-from app.config import Config
+from backend.config import Config
 
 TELE_TOKEN = Config.TELEGRAM_TOKEN
 TELE_ADMIN = Config.TELEGRAM_ADMIN_ID
