@@ -97,3 +97,12 @@ body {
   padding-bottom: 0.5rem;
   border-radius: 0 0.375rem 0.375rem 0;
 }
+
+/* Safe area padding utilities for Dynamic Island & Home indicator */
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+

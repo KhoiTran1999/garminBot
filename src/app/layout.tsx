@@ -44,10 +44,10 @@ export default function RootLayout({
       <head>
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
       </head>
-      <body className="bg-slate-950 text-slate-100 min-h-screen antialiased flex flex-col">
+      <body className="bg-slate-950 text-slate-100 min-h-[100dvh] h-[100dvh] antialiased flex flex-col overflow-hidden">
         <AuthProvider>
           <Navbar />
-          <main className="flex-1 w-full flex flex-col min-h-0">
+          <main className="flex-1 w-full flex flex-col min-h-0 overflow-y-auto">
             {children}
           </main>
           <Footer />

@@ -246,7 +246,7 @@ export default function ChatFirstPage() {
   };
 
   return (
-    <div className="flex flex-col flex-1 h-[calc(100dvh-3.75rem)] sm:h-[calc(100dvh-4rem)] max-w-3xl mx-auto w-full overflow-hidden">
+    <div className="flex flex-col flex-1 min-h-0 h-full max-w-3xl mx-auto w-full overflow-hidden">
       
       {/* KHUNG CHAT: Nếu chưa có tin nhắn, hiển thị màn hình New Chat tinh gọn */}
       {messages.length === 0 ? (
@@ -440,7 +440,10 @@ export default function ChatFirstPage() {
       )}
 
       {/* Ô NHẬP LIỆU DÍNH ĐÁY (Đệm đáy an toàn trên điện thoại) */}
-      <div className="px-4 sm:px-6 pt-2 pb-5 sm:pb-3 border-t border-slate-900/90 bg-slate-950/95 backdrop-blur-md shrink-0 z-20">
+      <div 
+        className="px-4 sm:px-6 pt-2 pb-safe border-t border-slate-900/90 bg-slate-950/95 backdrop-blur-md shrink-0 z-20"
+        style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom, 0px))" }}
+      >
         <div className="flex items-end gap-2 bg-slate-900/90 border border-slate-800 rounded-2xl px-3.5 py-1.5 focus-within:border-cyan-500 transition shadow-lg">
           <textarea
             ref={textareaRef}
@@ -470,7 +473,13 @@ export default function ChatFirstPage() {
             onClick={() => setDrawerOpen(false)}
             className="fixed inset-0 bg-black/60 z-40 backdrop-blur-xs transition-opacity"
           />
-          <div className="fixed inset-y-0 left-0 w-80 max-w-[85vw] bg-slate-950 border-r border-slate-800 z-50 p-4 flex flex-col shadow-2xl animate-in slide-in-from-left duration-200">
+          <div 
+            className="fixed inset-y-0 left-0 w-80 max-w-[85vw] bg-slate-950 border-r border-slate-800 z-50 p-4 flex flex-col shadow-2xl animate-in slide-in-from-left duration-200 pt-safe pb-safe"
+            style={{ 
+              paddingTop: "max(1rem, env(safe-area-inset-top, 0px))", 
+              paddingBottom: "max(1rem, env(safe-area-inset-bottom, 0px))" 
+            }}
+          >
             {/* Header Drawer */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
               <div className="flex items-center gap-2">

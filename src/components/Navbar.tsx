@@ -45,9 +45,12 @@ export const Navbar: React.FC = () => {
   };
 
   return (
-    <nav className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/95 backdrop-blur-md">
+    <nav 
+      className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/95 backdrop-blur-md pt-safe"
+      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+    >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-15 sm:h-16 items-center justify-between gap-3">
+        <div className="flex h-14 sm:h-16 items-center justify-between gap-3">
           {/* Logo & History toggle on Chat */}
           <div className="flex items-center gap-2.5 sm:gap-3">
             {isChatPage && (
