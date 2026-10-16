@@ -19,6 +19,7 @@ class Config:
 
     MODEL_BRAIN = os.getenv("MODEL_BRAIN") or ROUTER9_COMBOS_MODEL or "gemini-levelup-brain"
     MODEL_WORKER = os.getenv("MODEL_WORKER") or os.getenv("CUSTOM_AI_MODEL") or ROUTER9_COMBOS_MODEL or "gemini-levelup-worker"
+    MODEL_CHAT = os.getenv("MODEL_CHAT") or "ag/gemini-3.8-flash-low"
 
     # Supabase & Admin Config
     SUPABASE_URL = os.getenv("SUPABASE_URL")

@@ -46,6 +46,7 @@ export default function ChatFirstPage() {
   const [historyList, setHistoryList] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [chatStatus, setChatStatus] = useState<string | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -174,6 +175,7 @@ export default function ChatFirstPage() {
 
     setError(null);
     setInput("");
+    setChatStatus("Đang gửi câu hỏi...");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
@@ -182,20 +184,62 @@ export default function ChatFirstPage() {
     setMessages((prev) => [...prev, newMsg]);
 
     setLoading(true);
+    let streamedText = "";
+    let assistantAdded = false;
+
     try {
-      const res = await api.sendChatMessage(text);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: res.reply,
+      await api.sendChatMessageStream(
+        text,
+        (status) => {
+          setChatStatus(status);
         },
-      ]);
-      fetchHistoryOnly();
+        (chunk) => {
+          setChatStatus(null);
+          streamedText += chunk;
+          if (!assistantAdded) {
+            assistantAdded = true;
+            setMessages((prev) => [...prev, { role: "assistant", content: streamedText }]);
+          } else {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastIdx = updated.length - 1;
+              if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+                updated[lastIdx] = { ...updated[lastIdx], content: streamedText };
+              }
+              return updated;
+            });
+          }
+        },
+        (finalReply) => {
+          setChatStatus(null);
+          setLoading(false);
+          const replyText = finalReply || streamedText;
+          if (!assistantAdded) {
+            setMessages((prev) => [...prev, { role: "assistant", content: replyText }]);
+          } else {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastIdx = updated.length - 1;
+              if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+                updated[lastIdx] = { ...updated[lastIdx], content: replyText };
+              }
+              return updated;
+            });
+          }
+          fetchHistoryOnly();
+        },
+        (errMsg) => {
+          setChatStatus(null);
+          setLoading(false);
+          setError(errMsg || "Lỗi xử lý phản hồi từ AI.");
+        }
+      );
     } catch (err: any) {
+      setChatStatus(null);
       setError(err.message || "Lỗi gửi câu hỏi. Vui lòng thử lại.");
     } finally {
       setLoading(false);
+      setChatStatus(null);
     }
   };
 
@@ -207,6 +251,7 @@ export default function ChatFirstPage() {
     setMessages((prev) => [...prev, { role: "user", content: userPrompt }]);
 
     setLoading(true);
+    setChatStatus("HLV AI đang thu thập dữ liệu Garmin, phân tích và tạo Voice Script...");
     try {
       const result: AnalysisResult = await api.runAnalysis(mode);
       setMessages((prev) => [
@@ -224,6 +269,7 @@ export default function ChatFirstPage() {
       setError(err.message || "Lỗi phân tích Garmin. Vui lòng thử lại.");
     } finally {
       setLoading(false);
+      setChatStatus(null);
     }
   };
 
@@ -482,7 +528,12 @@ export default function ChatFirstPage() {
                   {isUser ? (
                     <div className="whitespace-pre-wrap">{m.content}</div>
                   ) : (
-                    <MarkdownRenderer content={m.content} />
+                    <div>
+                      <MarkdownRenderer content={m.content} />
+                      {loading && idx === messages.length - 1 && !chatStatus && (
+                        <span className="inline-block w-1.5 h-3.5 bg-sky-500 animate-pulse ml-0.5 align-middle rounded-xs" />
+                      )}
+                    </div>
                   )}
 
                   {/* Trình phát âm thanh nếu có */}
@@ -496,15 +547,15 @@ export default function ChatFirstPage() {
             );
           })}
 
-          {/* Đang tải phản hồi */}
-          {loading && (
-            <div className="flex items-start gap-2.5">
+          {/* Đang tải phản hồi & cập nhật tiến trình */}
+          {loading && chatStatus && (
+            <div className="flex items-start gap-2.5 animate-fadeIn">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-sky-600 border border-slate-200 shadow-xs">
                 <Bot className="h-4 w-4" />
               </div>
-              <div className="rounded-[20px] rounded-tl-[4px] border border-slate-200 bg-white p-4 text-xs text-slate-600 flex items-center gap-2.5 shadow-xs">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-sky-600 border-t-transparent" />
-                <span>HLV AI đang tra cứu dữ liệu Garmin và chuẩn bị câu trả lời...</span>
+              <div className="rounded-[20px] rounded-tl-[4px] border border-sky-200/80 bg-sky-50/90 p-3.5 text-xs text-sky-900 flex items-center gap-2.5 shadow-xs transition-all">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-sky-600 border-t-transparent shrink-0" />
+                <span className="font-medium tracking-tight">{chatStatus}</span>
               </div>
             </div>
           )}

@@ -7,7 +7,7 @@ import jwt
 import httpx
 from fastapi import FastAPI, Depends, HTTPException, status, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 # Thiết lập đường dẫn import gốc để nhận app.services và app.config
@@ -29,6 +29,7 @@ from backend.services.ai_service import (
     get_speech_script,
     generate_audio_from_text,
     get_customer_service_advice,
+    stream_customer_service_advice,
 )
 from backend.services.prompt_service import get_prompts_from_notion
 from backend.services.weather_service import WeatherService
@@ -79,6 +80,7 @@ class RunAnalysisRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str
+    stream: Optional[bool] = True
 
 class ProfileUpdateRequest(BaseModel):
     goal: Optional[str] = None
@@ -392,22 +394,54 @@ async def chat_with_coach(req: ChatRequest, user: dict = Depends(get_current_use
         prompts = get_prompts_from_notion(use_cache=True)
         ask_template = prompts.get("ask_help")
 
-        client = None
-        try:
-            client = login_garmin_for_web(user)
-        except Exception as ge:
-            print(f"[{user.get('name')}] Warning Garmin client chat: {ge}")
+        # Lazy Garmin client: chỉ đăng nhập khi AI thực sự gọi Garmin tools.
+        client_instance = None
+        def get_garmin_client():
+            nonlocal client_instance
+            if client_instance is None:
+                try:
+                    client_instance = login_garmin_for_web(user)
+                except Exception as ge:
+                    print(f"[{user.get('name')}] Warning Garmin client chat: {ge}")
+            return client_instance
 
-        # Gọi AI Customer Service / Agent Tool calling
-        ai_reply = await get_customer_service_advice(
-            user_id=user_id,
-            question=question,
-            user_config=user,
-            prompt_template=ask_template,
-            garmin_client=client
+        # 1. Trả về dạng JSON tĩnh nếu client yêu cầu stream=False
+        if req.stream is False:
+            ai_reply = await get_customer_service_advice(
+                user_id=user_id,
+                question=question,
+                user_config=user,
+                prompt_template=ask_template,
+                garmin_client=get_garmin_client
+            )
+            return {"reply": ai_reply or "Không nhận được phản hồi từ AI. Vui lòng thử lại."}
+
+        # 2. Mặc định: Trả về Streaming SSE kèm cập nhật tiến trình (status) và từng chunk (token stream)
+        import json
+        async def sse_generator():
+            try:
+                async for event in stream_customer_service_advice(
+                    user_id=user_id,
+                    question=question,
+                    user_config=user,
+                    prompt_template=ask_template,
+                    garmin_client=get_garmin_client
+                ):
+                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            except Exception as stream_err:
+                print(f"[{user.get('name')}] SSE Stream Error: {stream_err}")
+                err_payload = {"type": "error", "message": f"Lỗi luồng xử lý AI: {str(stream_err)}"}
+                yield f"data: {json.dumps(err_payload, ensure_ascii=False)}\n\n"
+
+        return StreamingResponse(
+            sse_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
         )
-
-        return {"reply": ai_reply or "Không nhận được phản hồi từ AI. Vui lòng thử lại."}
     except HTTPException:
         raise
     except Exception as e:

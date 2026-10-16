@@ -1945,7 +1945,7 @@ async def get_customer_service_advice(user_id: str, question: str, user_config: 
         help_doc = "Tài liệu trợ giúp không tồn tại."
 
     # 3. Chuẩn bị prompt
-    default_model = Config.MODEL_BRAIN
+    default_model = getattr(Config, "MODEL_CHAT", None) or os.getenv("MODEL_CHAT") or "ag/gemini-3.8-flash-low"
     model_to_use = default_model
 
     vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
@@ -2002,7 +2002,12 @@ YÊU CẦU:
     user_query = question
     if prompt_template and isinstance(prompt_template, dict):
         user_tmplt = prompt_template.get("user_template", "")
-        model_to_use = prompt_template.get("model", default_model)
+        tpl_model = prompt_template.get("model")
+        # Tránh các model thinking nặng nề (như gemini-levelup-brain tốn 13-16s) gây timeout 10s trên Vercel
+        if tpl_model and tpl_model not in ["gemini-levelup-brain", "gemini-3.1-pro"]:
+            model_to_use = tpl_model
+        else:
+            model_to_use = default_model
         if user_tmplt:
             try:
                 user_query = user_tmplt.format(
@@ -2022,13 +2027,14 @@ YÊU CẦU:
     try:
         if Config.ROUTER9_API_KEY:
             max_iterations = 5
+            has_garmin = bool(garmin_client or user_config.get("email"))
             for iteration in range(max_iterations):
-                print(f"[{user_label}] Calling LLM (iteration {iteration+1})...")
+                print(f"[{user_label}] Calling LLM ({model_to_use} | iteration {iteration+1})...")
                 response_msg = await call_ai_api_raw_async(
                     api_key=Config.ROUTER9_API_KEY,
                     model_name=model_to_use,
                     messages=messages,
-                    tools=GARMIN_TOOLS if garmin_client else None
+                    tools=GARMIN_TOOLS if has_garmin else None
                 )
 
                 # Check for tool calls
@@ -2068,12 +2074,25 @@ YÊU CẦU:
 
                         print(f"[{user_label}] 🛠️ AI requests tool: {tool_name} with args {tool_args}")
 
-                        # 1. Fetch Garmin Connect raw data in a non-blocking thread
-                        import asyncio
-                        raw_result = await asyncio.to_thread(execute_garmin_tool, garmin_client, tool_name, tool_args, user_label)
+                        # 1. Lấy Garmin client (hỗ trợ lazy client để tiết kiệm 2-5s khi không dùng tool)
+                        actual_client = garmin_client() if callable(garmin_client) else garmin_client
+                        if actual_client is None and user_config:
+                            try:
+                                from main import login_garmin
+                                actual_client = login_garmin(user_config.get("email"), user_config.get("password"), user_label)
+                            except Exception as client_err:
+                                print(f"[{user_label}] Lỗi khởi tạo Garmin client on-demand: {client_err}")
 
-                        # 2. Process raw data with MODEL_WORKER LLM
-                        processed_result = await process_data_with_worker(tool_name, tool_args, raw_result, user_label)
+                        # Fetch Garmin Connect raw data in a non-blocking thread
+                        import asyncio
+                        raw_result = await asyncio.to_thread(execute_garmin_tool, actual_client, tool_name, tool_args, user_label)
+
+                        # 2. Tối ưu tốc độ: Nếu dữ liệu Garmin đã tinh gọn (<= 3500 ký tự), bỏ qua bước MODEL_WORKER
+                        # Điều này giúp giảm 5-8 giây cho mỗi tool call, tránh lỗi Serverless Timeout trên Vercel
+                        if len(raw_result) <= 3500:
+                            processed_result = raw_result
+                        else:
+                            processed_result = await process_data_with_worker(tool_name, tool_args, raw_result, user_label)
 
                         return {
                             "role": "tool",
@@ -2108,7 +2127,291 @@ YÊU CẦU:
         print(f"[{user_label}] AI CS Error in agent loop: {str(e)}")
         import traceback
         traceback.print_exc()
-        return "Hiện tại trợ lý AI đang bận. Vui lòng thử lại sau."
+TOOL_FRIENDLY_NAMES = {
+    "get_health_summary": "chỉ số sức khỏe tổng quan",
+    "get_sleep_data": "dữ liệu giấc ngủ chi tiết",
+    "get_activities": "lịch sử hoạt động thể thao",
+    "get_custom_training_readiness": "điểm sẵn sàng tập luyện (Training Readiness)",
+    "get_heart_rates": "nhịp tim chi tiết trong ngày",
+    "get_steps_trend": "xu hướng bước chân",
+    "get_training_status": "trạng thái tập luyện & VO2 Max",
+    "get_intensity_minutes": "số phút vận động tích cực",
+    "get_hydration_data": "lượng nước nạp vào",
+    "get_fitness_age": "tuổi thể chất",
+    "get_devices": "thông tin thiết bị Garmin",
+    "get_body_battery_timeseries": "biểu đồ pin cơ thể & stress 24h",
+    "get_max_metrics": "chỉ số tối đa",
+    "get_lactate_threshold": "ngưỡng lactate",
+    "get_race_predictions": "dự đoán thành tích giải chạy",
+    "get_endurance_score": "điểm sức bền",
+    "get_hill_score": "điểm chạy dốc",
+    "get_personal_records": "kỷ lục cá nhân (PRs)",
+}
+
+async def stream_customer_service_advice(
+    user_id: str,
+    question: str,
+    user_config: dict,
+    prompt_template: dict = None,
+    garmin_context: str = None,
+    garmin_client = None
+):
+    """
+    Hỏi đáp hỗ trợ về tính năng và dữ liệu Garmin Connect sử dụng Tool Calling + Streaming SSE.
+    Cung cấp cập nhật tiến trình (type="status") và trả kết quả dạng chunk (type="chunk").
+    """
+    user_label = user_config.get('name', 'VĐV')
+    email = user_config.get('email')
+
+    yield {"type": "status", "message": "Đang chuẩn bị câu hỏi và tra cứu ngữ cảnh..."}
+
+    # 1. Đọc lịch sử chat từ Redis
+    history = redis_service.get_chat_history(user_id, limit=10)
+    history_str = ""
+    if history:
+        for msg in history:
+            role_label = "Người dùng" if msg["role"] == "user" else "Trợ lý"
+            history_str += f"{role_label}: {msg['content']}\n"
+    else:
+        history_str = "(Không có lịch sử trò chuyện gần đây)\n"
+
+    # 2. Đọc tài liệu hỗ trợ HELP.md
+    help_doc = ""
+    help_path = os.path.join(os.getcwd(), "HELP.md")
+    if os.path.exists(help_path):
+        try:
+            with open(help_path, "r", encoding="utf-8") as f:
+                help_doc = f.read()
+        except Exception as e:
+            print(f"Error reading HELP.md: {e}")
+            help_doc = "Tài liệu trợ giúp không khả dụng tại local."
+    else:
+        help_doc = "Tài liệu trợ giúp không tồn tại."
+
+    # 3. Chuẩn bị prompt
+    default_model = getattr(Config, "MODEL_CHAT", None) or os.getenv("MODEL_CHAT") or "ag/gemini-3.8-flash-low"
+    model_to_use = default_model
+
+    vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+    current_date_str = datetime.now(vn_tz).strftime("%Y-%m-%d")
+
+    goal = user_config.get('goal', 'Duy trì sức khỏe')
+    injury = user_config.get('injury', 'Không có')
+    note = user_config.get('note', '')
+    user_profile = f"Mục tiêu: {goal} | Chấn thương: {injury} | Ghi chú thêm: {note}"
+
+    system_instruction = f"""Bạn là Trợ lý hỗ trợ khách hàng thân thiện của Garmin AI Coach Pro.
+Nhiệm vụ của bạn là giải đáp thắc mắc của người dùng về các tính năng, cách thức hoạt động, nguồn dữ liệu và các vấn đề kỹ thuật dựa trên tài liệu được cung cấp.
+
+Tài khoản Garmin Connect của người dùng hiện ĐÃ ĐĂNG NHẬP thành công và sẵn sàng để truy xuất dữ liệu.
+Nếu câu hỏi của người dùng liên quan đến dữ liệu cá nhân, sức khỏe, giấc ngủ, tập luyện hoặc bất kỳ chỉ số nào từ Garmin của họ, bạn PHẢI sử dụng các công cụ (tools) được cung cấp để lấy dữ liệu tương ứng.
+Hãy luôn mặc định ngày cần lấy là hôm nay ({current_date_str}) trừ khi người dùng nói cụ thể mốc thời gian khác (ví dụ: hôm qua, 3 ngày trước, ngày 2026-06-20). Hãy quy đổi thông minh các mốc thời gian này về định dạng YYYY-MM-DD dựa trên ngày hôm nay.
+
+Sau khi gọi tools và lấy được dữ liệu, hãy phân tích kỹ, tổng hợp và đưa ra đánh giá, nhận xét cũng như lời khuyên cá nhân hóa hữu ích dựa trên hồ sơ của người dùng.
+
+Hồ sơ người dùng:
+- {user_profile}
+
+Ngày hiện tại (Hôm nay): {current_date_str}
+
+TÀI LIỆU HƯỚNG DẪN & THÔNG TIN HỆ THỐNG:
+---
+{help_doc}
+---
+
+YÊU CẦU:
+1. Trả lời trực tiếp, rõ ràng câu hỏi của người dùng.
+2. Dựa hoàn toàn vào tài liệu và dữ liệu sức khỏe từ các công cụ (nếu có) để trả lời. Không tự chế thông tin không có trong tài liệu/dữ liệu trả về.
+3. Nếu câu hỏi liên quan đến chỉ số sức khỏe của người dùng mà bạn không thể truy xuất được hoặc công cụ báo lỗi, hãy lịch sự thông báo cho họ đồng bộ thiết bị hoặc thử lại sau.
+4. Giọng điệu thân thiện, chu đáo, hỗ trợ nhiệt tình.
+5. Trả về định dạng Markdown (sử dụng dấu * để bold, dùng dấu • cho danh sách).
+"""
+
+    if prompt_template and isinstance(prompt_template, dict):
+        sys_p = prompt_template.get("system_prompt", "")
+        if sys_p:
+            system_instruction = f"{sys_p}\n\nThông tin hệ thống & Người dùng:\n- Ngày hôm nay: {current_date_str}\n- Hồ sơ người dùng: {user_profile}\n- Tài liệu trợ giúp:\n{help_doc}"
+
+    messages = [{"role": "system", "content": system_instruction}]
+
+    if history:
+        for msg in history:
+            role = msg.get("role")
+            if role in ["user", "assistant"]:
+                messages.append({"role": role, "content": msg.get("content", "")})
+
+    user_query = question
+    if prompt_template and isinstance(prompt_template, dict):
+        user_tmplt = prompt_template.get("user_template", "")
+        tpl_model = prompt_template.get("model")
+        if tpl_model and tpl_model not in ["gemini-levelup-brain", "gemini-3.1-pro"]:
+            model_to_use = tpl_model
+        else:
+            model_to_use = default_model
+        if user_tmplt:
+            try:
+                user_query = user_tmplt.format(
+                    user_label=user_label,
+                    help_doc=help_doc,
+                    chat_history=history_str,
+                    question=question,
+                    garmin_info=garmin_context or "",
+                    garmin_context=garmin_context or ""
+                )
+            except Exception:
+                pass
+
+    messages.append({"role": "user", "content": user_query})
+
+    # 4. Agent tool calling loop với Streaming
+    try:
+        if not Config.ROUTER9_API_KEY:
+            yield {"type": "error", "message": "Tính năng hỏi đáp chưa được cấu hình ROUTER9_API_KEY."}
+            return
+
+        from openai import AsyncOpenAI
+        client_ai = AsyncOpenAI(
+            base_url=getattr(Config, "CUSTOM_AI_BASE_URL", "https://khoitran1999-claude-server.hf.space/v1"),
+            api_key=Config.ROUTER9_API_KEY
+        )
+        resolved_model = normalize_model_name(model_to_use)
+
+        has_garmin = bool(garmin_client or user_config.get("email"))
+        max_iterations = 5
+
+        yield {"type": "status", "message": "HLV AI đang phân tích câu hỏi..."}
+
+        for iteration in range(max_iterations):
+            print(f"[{user_label}] Streaming LLM ({resolved_model} | iteration {iteration+1})...")
+
+            stream_kwargs = {
+                "model": resolved_model,
+                "messages": messages,
+                "stream": True
+            }
+            if has_garmin:
+                stream_kwargs["tools"] = GARMIN_TOOLS
+
+            stream_res = await client_ai.chat.completions.create(**stream_kwargs)
+
+            tool_calls_dict = {}
+            content_chunks = []
+
+            async for chunk in stream_res:
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+
+                # Thu thập tool_calls nếu model yêu cầu gọi công cụ
+                if delta.tool_calls:
+                    for tc in delta.tool_calls:
+                        idx = tc.index
+                        if idx not in tool_calls_dict:
+                            tool_calls_dict[idx] = {
+                                "id": tc.id or f"call_{idx}",
+                                "name": tc.function.name or "",
+                                "arguments": tc.function.arguments or ""
+                            }
+                        else:
+                            if tc.id:
+                                tool_calls_dict[idx]["id"] += tc.id
+                            if tc.function.name:
+                                tool_calls_dict[idx]["name"] += tc.function.name
+                            if tc.function.arguments:
+                                tool_calls_dict[idx]["arguments"] += tc.function.arguments
+
+                # Trả về chunk nội dung trực tiếp cho user
+                if delta.content:
+                    content_chunks.append(delta.content)
+                    yield {"type": "chunk", "text": delta.content}
+
+            # Xử lý khi có tool calls
+            if tool_calls_dict:
+                tool_list = list(tool_calls_dict.values())
+
+                assistant_msg = {
+                    "role": "assistant",
+                    "content": "".join(content_chunks) if content_chunks else None,
+                    "tool_calls": [
+                        {
+                            "id": t["id"],
+                            "type": "function",
+                            "function": {
+                                "name": t["name"],
+                                "arguments": t["arguments"]
+                            }
+                        } for t in tool_list
+                    ]
+                }
+                messages.append(assistant_msg)
+
+                tool_names_str = ", ".join([TOOL_FRIENDLY_NAMES.get(t["name"], t["name"]) for t in tool_list])
+                yield {"type": "status", "message": f"Đang kết nối Garmin lấy {tool_names_str}..."}
+
+                async def run_single_tool_pipeline(t):
+                    t_name = t["name"]
+                    import json
+                    try:
+                        t_args = json.loads(t["arguments"]) if t["arguments"] else {}
+                    except Exception as je:
+                        print(f"Error parsing tool args: {je}")
+                        t_args = {}
+
+                    if "date" in t_args and not t_args["date"]:
+                        t_args["date"] = current_date_str
+                    if "start_date" in t_args and not t_args["start_date"]:
+                        t_args["start_date"] = current_date_str
+
+                    actual_client = garmin_client() if callable(garmin_client) else garmin_client
+                    if actual_client is None and user_config:
+                        try:
+                            from main import login_garmin
+                            actual_client = login_garmin(user_config.get("email"), user_config.get("password"), user_label)
+                        except Exception as client_err:
+                            print(f"[{user_label}] Lỗi khởi tạo Garmin client: {client_err}")
+
+                    import asyncio
+                    raw_result = await asyncio.to_thread(execute_garmin_tool, actual_client, t_name, t_args, user_label)
+
+                    if len(raw_result) <= 3500:
+                        processed = raw_result
+                    else:
+                        processed = await process_data_with_worker(t_name, t_args, raw_result, user_label)
+
+                    return {
+                        "role": "tool",
+                        "tool_call_id": t["id"],
+                        "name": t_name,
+                        "content": processed
+                    }
+
+                import asyncio
+                tool_tasks = [run_single_tool_pipeline(t) for t in tool_list]
+                tool_responses = await asyncio.gather(*tool_tasks)
+                messages.extend(tool_responses)
+
+                yield {"type": "status", "message": "Đang tổng hợp thông tin thể trạng và soạn câu trả lời..."}
+                continue
+
+            else:
+                # Không có tool calls -> Nội dung trả lời đã được stream xong!
+                final_reply = "".join(content_chunks)
+                final_reply = strip_thinking(final_reply)
+
+                if final_reply:
+                    redis_service.save_chat_message(user_id, "user", question, limit=10)
+                    redis_service.save_chat_message(user_id, "assistant", final_reply, limit=10)
+
+                yield {"type": "done", "reply": final_reply}
+                return
+
+        yield {"type": "error", "message": "Vượt quá số lần gọi công cụ cho phép."}
+
+    except Exception as e:
+        print(f"[{user_label}] Error in stream_customer_service_advice: {e}")
+        import traceback
+        traceback.print_exc()
+        yield {"type": "error", "message": f"Lỗi xử lý phản hồi từ AI: {str(e)}"}
 
 
 def route_ask_query(question: str, current_date_str: str) -> dict:

@@ -129,7 +129,9 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
 
   if (!response.ok) {
     let errorDetail = `Lỗi máy chủ (${response.status})`;
-    if (data && data.detail) {
+    if (response.status === 504 || (rawText && rawText.includes("FUNCTION_INVOCATION_TIMEOUT"))) {
+      errorDetail = "Yêu cầu phản hồi quá thời gian quy định của máy chủ Vercel (Timeout). AI cần thêm thời gian xử lý dữ liệu Garmin, bạn vui lòng gửi lại hoặc hỏi câu hỏi ngắn hơn một chút nhé!";
+    } else if (data && data.detail) {
       errorDetail = data.detail;
     } else if (rawText && !rawText.trim().startsWith("<")) {
       errorDetail = rawText.length > 200 ? rawText.substring(0, 200) + "..." : rawText;
@@ -208,10 +210,110 @@ export const api = {
     });
   },
 
+  async sendChatMessageStream(
+    question: string,
+    onStatus?: (status: string) => void,
+    onChunk?: (chunk: string) => void,
+    onDone?: (reply: string) => void,
+    onError?: (error: string) => void
+  ): Promise<string> {
+    const token = getAuthToken();
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Accept": "text/event-stream",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ question, stream: true }),
+    });
+
+    if (response.status === 401) {
+      clearAuthToken();
+      if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
+        window.location.href = "/login";
+      }
+      throw new Error("Phiên làm việc hết hạn. Vui lòng đăng nhập lại.");
+    }
+
+    if (!response.ok) {
+      const rawText = await response.text();
+      let errorMsg = `Lỗi máy chủ (${response.status})`;
+      if (response.status === 504 || rawText.includes("FUNCTION_INVOCATION_TIMEOUT")) {
+        errorMsg = "Yêu cầu phản hồi quá thời gian quy định của máy chủ Vercel (Timeout). AI cần thêm thời gian xử lý dữ liệu Garmin, bạn vui lòng gửi lại câu hỏi nhé!";
+      } else {
+        try {
+          const parsed = JSON.parse(rawText);
+          if (parsed.detail) errorMsg = parsed.detail;
+        } catch {
+          if (rawText && !rawText.trim().startsWith("<")) errorMsg = rawText;
+        }
+      }
+      if (onError) onError(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    if (!response.body) {
+      throw new Error("Trình duyệt không hỗ trợ đọc luồng dữ liệu (ReadableStream).");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let accumulatedText = "";
+    let buffer = "";
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() || "";
+
+        for (const part of parts) {
+          const lines = part.split("\n");
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith("data:")) {
+              const dataStr = trimmed.replace(/^data:\s*/, "").trim();
+              if (!dataStr) continue;
+              try {
+                const parsed = JSON.parse(dataStr);
+                if (parsed.type === "status") {
+                  if (onStatus) onStatus(parsed.message);
+                } else if (parsed.type === "chunk") {
+                  accumulatedText += parsed.text;
+                  if (onChunk) onChunk(parsed.text);
+                } else if (parsed.type === "done") {
+                  if (onDone) onDone(parsed.reply || accumulatedText);
+                } else if (parsed.type === "error") {
+                  if (onError) onError(parsed.message);
+                  throw new Error(parsed.message);
+                }
+              } catch (parseErr) {
+                console.warn("Lỗi phân tích cú pháp SSE:", parseErr, dataStr);
+              }
+            }
+          }
+        }
+      }
+    } catch (streamErr: any) {
+      if (onError) onError(streamErr.message);
+      throw streamErr;
+    }
+
+    return accumulatedText;
+  },
+
   async sendChatMessage(question: string): Promise<{ reply: string }> {
     return fetchWithAuth("/api/chat", {
       method: "POST",
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question, stream: false }),
     });
   },
 
