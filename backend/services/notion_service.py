@@ -73,7 +73,6 @@ def get_users_from_notion():
                     "name": get_text("Name", "title"),
                     "email": get_text("Email", "email"),
                     "password": get_text("Password", "rich_text"), # Cột Password của bạn là Text
-                    "telegram_chat_id": get_text("Telegram Chat ID", "rich_text"), # Cột Chat ID là Text
                     
                     # Các trường bổ sung cho AI
                     "goal": get_text("Training Goal", "rich_text"),
@@ -86,6 +85,9 @@ def get_users_from_notion():
                 # Chỉ thêm user nếu có đủ email/pass
                 if user["email"] and user["password"]:
                     users.append(user)
+                    # Cache từng user theo email
+                    if user.get("email"):
+                        redis_service.set_user_cache(user["email"], user, ttl_seconds=86400 * 7)
             
             print(f"Found {len(users)} active users.")
             if users:
@@ -96,3 +98,25 @@ def get_users_from_notion():
         print(f"Exception calling Notion: {e}")
         cached = redis_service.get_user_cache("__notion_active_users__")
         return cached if cached else []
+
+def get_user_by_email(email: str):
+    """
+    Tìm kiếm nhanh user theo Email:
+    1. Kiểm tra Redis cache (< 5ms)
+    2. Nếu không có, query Notion và tự động cập nhật cache
+    """
+    if not email:
+        return None
+
+    # 1. Tra cứu nhanh từ Redis
+    cached_user = redis_service.get_user_cache(email)
+    if cached_user:
+        return cached_user
+
+    # 2. Query Notion nếu chưa có cache
+    all_users = get_users_from_notion()
+    for u in all_users:
+        if str(u.get("email", "")).strip().lower() == str(email).strip().lower():
+            return u
+
+    return None

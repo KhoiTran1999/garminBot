@@ -6,7 +6,6 @@ export interface UserProfile {
   goal?: string;
   injury?: string;
   note?: string;
-  telegram_chat_id?: string;
 }
 
 export interface AnalysisResult {

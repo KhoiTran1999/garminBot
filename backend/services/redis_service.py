@@ -43,7 +43,7 @@ class RedisService:
             # Mark connection failed temporarily so subsequent requests don't hang
             return default_return
 
-    def check_and_set_dedup(self, tele_id: str, date_str: str, mode: str) -> bool:
+    def check_and_set_dedup(self, user_id: str, date_str: str, mode: str) -> bool:
         """
         Check if a report has already been sent for the user on the given date and mode.
         Allows up to 2 times a day by enforcing a 12-hour gap (43200 seconds).
@@ -51,53 +51,49 @@ class RedisService:
             True if it's a new report (successfully set deduplication lock).
             False if it has already been sent (deduplication lock exists) or if Redis fails.
         """
-        if not tele_id:
-            return True # Fail-safe: allow if tele_id is missing (e.g. admin or test)
+        if not user_id:
+            return True
 
-        # Remove date_str from key to enforce 1-hour gap across date boundaries
-        key = f"sent:{tele_id}:{mode}"
+        key = f"sent:{user_id}:{mode}"
 
-        # nx=True means only set if the key does not exist. ex=3600 is 1 hour TTL.
         def _op():
             return bool(self._client.set(key, "1", ex=3600, nx=True))
 
         return self._execute(_op, default_return=True)
 
-    def delete_dedup(self, tele_id: str, date_str: str, mode: str) -> bool:
+    def delete_dedup(self, user_id: str, date_str: str, mode: str) -> bool:
         """
         Delete a deduplication lock if a run failed.
         """
-        if not tele_id:
+        if not user_id:
             return True
 
-        key = f"sent:{tele_id}:{mode}"
+        key = f"sent:{user_id}:{mode}"
 
         def _op():
             return bool(self._client.delete(key))
 
         return self._execute(_op, default_return=True)
 
-    def is_rate_limited(self, tele_id: str, mode: str, limit: int = 3, window_seconds: int = 600) -> bool:
+    def is_rate_limited(self, user_id: str, mode: str, limit: int = 3, window_seconds: int = 600) -> bool:
         """
         Rate limiter to prevent spamming triggers.
         Returns:
             True if the user is rate limited (exceeded threshold).
             False if the trigger is allowed.
         """
-        if not tele_id:
+        if not user_id:
             return False
 
-        key = f"ratelimit:{tele_id}:{mode}"
+        key = f"ratelimit:{user_id}:{mode}"
 
         def _op():
-            # Get current count
             count_str = self._client.get(key)
             if count_str is not None:
                 count = int(count_str)
                 if count >= limit:
                     return True
 
-            # Increment and set expire if it's new
             pipe = self._client.pipeline()
             pipe.incr(key)
             pipe.ttl(key)
@@ -146,14 +142,14 @@ class RedisService:
 
         return self._execute(_op, default_return=False)
 
-    def get_chat_history(self, tele_id: str, limit: int = 10) -> list:
+    def get_chat_history(self, user_id: str, limit: int = 10) -> list:
         """
         Get chat history for a user. Returns a list of dicts chronological.
         """
-        if not tele_id:
+        if not user_id:
             return []
 
-        key = f"chat_history:{tele_id}"
+        key = f"chat_history:{user_id}"
 
         def _op():
             raw_history = self._client.lrange(key, 0, limit - 1)
@@ -169,14 +165,14 @@ class RedisService:
 
         return self._execute(_op, default_return=[])
 
-    def save_chat_message(self, tele_id: str, role: str, content: str, limit: int = 10) -> bool:
+    def save_chat_message(self, user_id: str, role: str, content: str, limit: int = 10) -> bool:
         """
         Save a chat message to the user's history list.
         """
-        if not tele_id or not content:
+        if not user_id or not content:
             return False
 
-        key = f"chat_history:{tele_id}"
+        key = f"chat_history:{user_id}"
 
         import json
         message_str = json.dumps({"role": role, "content": content}, ensure_ascii=False)
@@ -226,6 +222,60 @@ class RedisService:
             val = json.dumps(user_data, ensure_ascii=False)
             return bool(self._client.set(key, val, ex=ttl_seconds))
 
+        return self._execute(_op, default_return=False)
+
+
+    def get_garmin_tokens(self, email: str) -> str:
+        """
+        Lấy Garmin OAuth token lưu trong Redis cache.
+        """
+        if not email:
+            return None
+        clean_email = email.strip().lower()
+        key = f"garmin_tokens:{clean_email}"
+        def _op():
+            return self._client.get(key)
+        return self._execute(_op, default_return=None)
+
+    def save_garmin_tokens(self, email: str, token_str: str, ttl_seconds: int = 86400 * 30) -> bool:
+        """
+        Lưu Garmin OAuth token vào Redis (mặc định 30 ngày) để đăng nhập tức thì.
+        """
+        if not email or not token_str:
+            return False
+        clean_email = email.strip().lower()
+        key = f"garmin_tokens:{clean_email}"
+        def _op():
+            return bool(self._client.set(key, token_str, ex=ttl_seconds))
+        return self._execute(_op, default_return=False)
+
+    def get_prompts_cache(self) -> dict:
+        """
+        Lấy cache prompts Notion từ Redis (tránh gọi Notion API mỗi lần).
+        """
+        key = "notion_prompts_cache"
+        def _op():
+            raw = self._client.get(key)
+            if raw:
+                import json
+                try:
+                    return json.loads(raw)
+                except:
+                    return None
+            return None
+        return self._execute(_op, default_return=None)
+
+    def set_prompts_cache(self, prompts: dict, ttl_seconds: int = 3600) -> bool:
+        """
+        Lưu cache prompts Notion vào Redis (mặc định 1 giờ).
+        """
+        if not prompts:
+            return False
+        key = "notion_prompts_cache"
+        import json
+        def _op():
+            val = json.dumps(prompts, ensure_ascii=False)
+            return bool(self._client.set(key, val, ex=ttl_seconds))
         return self._execute(_op, default_return=False)
 
 # Initialize a global Redis service instance

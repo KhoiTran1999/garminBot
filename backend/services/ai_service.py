@@ -294,7 +294,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
         BIẾN ĐỘNG TRONG NGÀY (2-hour blocks):
 {timeseries_text}
 
-        YÊU CẦU OUTPUT (Markdown Telegram):
+        YÊU CẦU OUTPUT (Markdown):
         Trả về báo cáo ngắn gọn, tập trung vào chất lượng giấc ngủ và sự sẵn sàng cho ngày mới:
 
         **💤 PHÂN TÍCH GIẤC NGỦ**
@@ -342,7 +342,7 @@ def get_ai_advice(today, r_data, r_score, l_data, user_config, prompt_template=N
         - **Lịch sử hoạt động:**
         {activities_text}
 
-        YÊU CẦU OUTPUT (Markdown Telegram):
+        YÊU CẦU OUTPUT (Markdown):
         Trả về báo cáo theo format dưới đây, văn phong thân thiện nhưng chuyên môn:
 
         **🔢 TỔNG QUAN HÔM NAY**
@@ -480,7 +480,7 @@ def get_battery_analysis_advice(today, r_data, user_config, prompt_template=None
         BIẾN ĐỘNG TRONG NGÀY (2-hour blocks):
 {timeseries_text}
 
-        YÊU CẦU OUTPUT (Markdown Telegram):
+        YÊU CẦU OUTPUT (Markdown):
         Trả về báo cáo phân tích biểu đồ năng lượng, tập trung tìm ra nguyên nhân hao hụt pin:
 
         **🔋 TRẠNG THÁI NĂNG LƯỢNG**
@@ -622,7 +622,7 @@ def get_workout_analysis_advice(activity_data_list, user_config, prompt_template
             - Kỹ thuật/Chiến thuật cần cải thiện.
             - Đánh giá bài tập này đóng góp gì cho mục tiêu {goal}.
         
-        OUTPUT FORMAT (Markdown Telegram):
+        OUTPUT FORMAT (Markdown):
         Trả về báo cáo ngắn gọn, chuyên sâu, dùng emoji:
         
         **📊 PHÂN TÍCH BÀI TẬP CHUYÊN SÂU**
@@ -1914,7 +1914,7 @@ async def process_data_with_worker(tool_name: str, tool_args: dict, raw_data_str
         print(f"[{user_label}] ⚠️ Error in MODEL_WORKER processing {tool_name}: {e}. Falling back to raw data.")
         return raw_data_str
 
-async def get_customer_service_advice(tele_id: str, question: str, user_config: dict, prompt_template: dict = None, garmin_context: str = None, garmin_client = None) -> str:
+async def get_customer_service_advice(user_id: str, question: str, user_config: dict, prompt_template: dict = None, garmin_context: str = None, garmin_client = None) -> str:
     """
     Hỏi đáp hỗ trợ về tính năng và dữ liệu của Garmin Connect sử dụng Tool Calling / Agent.
     """
@@ -1922,7 +1922,7 @@ async def get_customer_service_advice(tele_id: str, question: str, user_config: 
     email = user_config.get('email')
 
     # 1. Đọc lịch sử chat từ Redis
-    history = redis_service.get_chat_history(tele_id, limit=10)
+    history = redis_service.get_chat_history(user_id, limit=10)
     history_str = ""
     if history:
         for msg in history:
@@ -1980,7 +1980,7 @@ YÊU CẦU:
 2. Dựa hoàn toàn vào tài liệu và dữ liệu sức khỏe từ các công cụ (nếu có) để trả lời. Không tự chế thông tin không có trong tài liệu/dữ liệu trả về.
 3. Nếu câu hỏi liên quan đến chỉ số sức khỏe của người dùng mà bạn không thể truy xuất được hoặc công cụ báo lỗi, hãy lịch sự thông báo cho họ đồng bộ thiết bị hoặc thử lại sau.
 4. Giọng điệu thân thiện, chu đáo, hỗ trợ nhiệt tình.
-5. Trả về định dạng Markdown Telegram (sử dụng dấu * để bold, dùng dấu • cho danh sách).
+5. Trả về định dạng Markdown (sử dụng dấu * để bold, dùng dấu • cho danh sách).
 """
 
     if prompt_template and isinstance(prompt_template, dict):
@@ -2096,8 +2096,8 @@ YÊU CẦU:
                     # Final answer received
                     ai_reply = strip_thinking(response_msg.content)
                     if ai_reply:
-                        redis_service.save_chat_message(tele_id, "user", question, limit=10)
-                        redis_service.save_chat_message(tele_id, "assistant", ai_reply, limit=10)
+                        redis_service.save_chat_message(user_id, "user", question, limit=10)
+                        redis_service.save_chat_message(user_id, "assistant", ai_reply, limit=10)
                     return ai_reply
 
             return "Không thể hoàn thành yêu cầu vì vượt quá số lần gọi công cụ cho phép."

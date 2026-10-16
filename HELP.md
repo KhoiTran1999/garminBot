@@ -7,7 +7,7 @@ Chao mung ban den voi he thong ho tro khach hang cua Garmin AI Coach Pro. Duoi d
 *   Phan tich Giac ngu (sleep_analysis): Danh gia chuyen sau chat luong giac ngu dem qua (ngu sau, ngu REM, thuc giac), nhip tim nghi (RHR), SpO2, nhip tho va dua ra loi khuyen dau ngay.
 *   Phan tich Bai tap (workout): Phan tich chi tiet bai tap trong vong 24h qua dua tren Splits, Heart Rate Zones, Power, Pace, cardiac drift, va chien thuat phan bo suc (Pacing strategy).
 *   Bat mach Nang luong (battery): Phan tich bieu do Pin co the (Body Battery) va Stress theo cac khoang thoi gian 2 gio (timeseries), xac dinh nguyen nhan hao hut pin (do tap luyen hay stress) va loi khuyen phuc hoi.
-*   Ban thu am (Voice Note): Moi bao cao phan tich deu duoc viet lai thanh kich ban noi tu nhien va chuyen thanh file am thanh (TTS) gui qua Telegram de ban co the nghe thay vi doc.
+*   Ban thu am (Voice Note): Moi bao cao phan tich deu duoc viet lai thanh kich ban noi tu nhien va chuyen thanh file am thanh (TTS) de ban co the nghe truc tiep tren he thong.
 
 ## 2. Nguon Du Lieu (Data Sources)
 *   Chi so suc khoe & bai tap: Dong bo truc tiep tu dong ho Garmin cua ban thong qua API Garmin Connect.
@@ -21,5 +21,5 @@ Chao mung ban den voi he thong ho tro khach hang cua Garmin AI Coach Pro. Duoi d
 *   Custom Training Readiness: Voi cac dong ho Garmin khong ho tro san tinh nang Training Readiness, he thong se tu dong tinh toan diem san sang (tu 1-100) va danh gia bang cong thuc quy doi rieng biet (dua tren: Giac ngu, Pin co the, Stress, HRV, Nhit tim nghi, Oxy mau, va Nhip tho). Tính năng này có thể được gọi thủ công qua tool `get_custom_training_readiness`.
 
 ## 4. Lien He Ho Tro
-*   Quan tri vien (Admin) Telegram: @KhoiTran99 (ID: 1088200599, Ten: Khoi Tran, Ngon ngu: Tieng Viet).
-*   Neu bot gap loi, khong gui tin nhan, hoac muon thay doi thong tin cau hinh Notion, nguoi dung can lien he truc tiep voi Admin.
+*   Quan tri vien (Admin): Khoi Tran (Email: tranquockhoi1999@gmail.com, Ngon ngu: Tieng Viet).
+*   Neu he thong gap loi hoac muon thay doi thong tin cau hinh Notion, nguoi dung can lien he truc tiep voi Admin.

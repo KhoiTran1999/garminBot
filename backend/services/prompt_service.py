@@ -3,13 +3,20 @@ import httpx
 from dotenv import load_dotenv
 
 from backend.config import Config
+from backend.services.redis_service import redis_service
 
-def get_prompts_from_notion():
+def get_prompts_from_notion(use_cache: bool = False):
     """
-    Fetches prompts from the Notion Prompt Database.
+    Fetches prompts from the Notion Prompt Database (with Redis cache support).
     Returns a dictionary where keys are the 'Name' (title) of the prompt 
-    and values are the 'Content' (rich_text) of the prompt.
+    and values are dict with system_prompt, user_template, model.
     """
+    if use_cache:
+        cached_prompts = redis_service.get_prompts_cache()
+        if cached_prompts:
+            print(f"✅ Loaded {len(cached_prompts)} prompts from Redis cache.")
+            return cached_prompts
+
     token = Config.NOTION_TOKEN
     database_id = Config.NOTION_PROMPT_DATABASE_ID
 
@@ -106,6 +113,8 @@ def get_prompts_from_notion():
                     }
 
             print(f"✅ Loaded {len(prompts)} prompts from Notion: {', '.join(prompts.keys())}")
+            if prompts and use_cache:
+                redis_service.set_prompts_cache(prompts, ttl_seconds=3600)
             return prompts
 
     except Exception as e:

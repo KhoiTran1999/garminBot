@@ -138,7 +138,6 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
             "goal": payload.get("goal", ""),
             "injury": payload.get("injury", ""),
             "note": payload.get("note", ""),
-            "telegram_chat_id": payload.get("telegram_chat_id", ""),
             # Giữ password nếu có lưu trong cache trước đó
             "password": ""
         }
@@ -192,8 +191,7 @@ def login(req: LoginRequest):
         "name": target_user.get("name", "Vận động viên"),
         "goal": target_user.get("goal", ""),
         "injury": target_user.get("injury", ""),
-        "note": target_user.get("note", ""),
-        "telegram_chat_id": target_user.get("telegram_chat_id", "")
+        "note": target_user.get("note", "")
     })
     return {
         "token": token,
@@ -214,8 +212,7 @@ def get_me(user: dict = Depends(get_current_user)):
             "email": user.get("email"),
             "goal": user.get("goal"),
             "injury": user.get("injury"),
-            "note": user.get("note"),
-            "telegram_chat_id": user.get("telegram_chat_id")
+            "note": user.get("note")
         }
     }
 
@@ -287,7 +284,7 @@ async def run_analysis(req: RunAnalysisRequest, user: dict = Depends(get_current
         raise HTTPException(status_code=500, detail=f"Lỗi đăng nhập Garmin Connect: {str(e)}")
 
     is_fresh, fresh_msg = check_garmin_sync_status(client, max_age_hours=2.0, user_label=name)
-    prompts = get_prompts_from_notion()
+    prompts = get_prompts_from_notion(use_cache=True)
     aqi_data = WeatherService.get_aqi_data()
 
     ai_report = ""
@@ -392,7 +389,7 @@ async def chat_with_coach(req: ChatRequest, user: dict = Depends(get_current_use
         if not question:
             raise HTTPException(status_code=400, detail="Câu hỏi không được để trống.")
 
-        prompts = get_prompts_from_notion()
+        prompts = get_prompts_from_notion(use_cache=True)
         ask_template = prompts.get("ask_help")
 
         client = None
@@ -403,7 +400,7 @@ async def chat_with_coach(req: ChatRequest, user: dict = Depends(get_current_use
 
         # Gọi AI Customer Service / Agent Tool calling
         ai_reply = await get_customer_service_advice(
-            tele_id=user_id,
+            user_id=user_id,
             question=question,
             user_config=user,
             prompt_template=ask_template,

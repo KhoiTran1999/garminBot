@@ -6,11 +6,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
     NOTION_TOKEN = os.getenv("NOTION_TOKEN")
     NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
     NOTION_PROMPT_DATABASE_ID = os.getenv("NOTION_PROMPT_DATABASE_ID")
-    TELEGRAM_ADMIN_ID = os.getenv("TELEGRAM_ADMIN_ID")
     REDIS_URL = os.getenv("REDIS_URL")
 
     # Load 9Router / Custom AI Key (không fallback về GEMINI_API_KEY)
