@@ -73,7 +73,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, title = "Bản th
   };
 
   return (
-    <div className="rounded-xl border border-cyan-800/60 bg-gradient-to-r from-slate-900 via-slate-900 to-cyan-950/40 p-4 shadow-lg">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
       <audio
         ref={audioRef}
         src={src}
@@ -83,22 +83,22 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, title = "Bản th
         onError={() => setError(true)}
       />
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-            <Headphones className="h-4 w-4" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+            <Headphones className="h-5 w-5" />
           </div>
           <div>
-            <h4 className="text-xs font-bold text-white tracking-wide">{title}</h4>
-            <p className="text-[10px] text-cyan-300">Giọng đọc AI tóm tắt giáo án & phân tích</p>
+            <h4 className="text-xs sm:text-sm font-semibold text-slate-900 tracking-wide">{title}</h4>
+            <p className="text-[11px] text-slate-500">Giọng đọc AI tóm tắt giáo án & phân tích</p>
           </div>
         </div>
 
         {error ? (
-          <span className="text-xs text-amber-400">Không thể phát âm thanh trực tiếp</span>
+          <span className="text-xs text-amber-600 font-medium">Không thể phát âm thanh trực tiếp</span>
         ) : (
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono text-cyan-300">
+            <span className="text-xs font-mono font-medium text-sky-700">
               {formatTime(currentTime)} / {formatTime(duration)}
             </span>
           </div>
@@ -108,15 +108,16 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, title = "Bản th
       <div className="flex items-center gap-3">
         <button
           onClick={togglePlay}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cyan-500 text-slate-950 hover:bg-cyan-400 transition shadow-md shadow-cyan-500/20"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-600 text-white hover:bg-sky-500 transition shadow-xs active:scale-95"
+          title={isPlaying ? "Tạm dừng" : "Phát âm thanh"}
         >
-          {isPlaying ? <Pause className="h-5 w-5 fill-slate-950" /> : <Play className="h-5 w-5 fill-slate-950 ml-0.5" />}
+          {isPlaying ? <Pause className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5 fill-current ml-0.5" />}
         </button>
 
         <button
           onClick={restartAudio}
           title="Phát lại từ đầu"
-          className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition"
+          className="h-9 w-9 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition"
         >
           <RotateCcw className="h-4 w-4" />
         </button>
@@ -127,7 +128,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, title = "Bản th
           max={duration || 100}
           value={currentTime}
           onChange={handleSeek}
-          className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-slate-700 accent-cyan-400"
+          className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-sky-600"
         />
 
         <Volume2 className="h-4 w-4 text-slate-400 shrink-0 hidden sm:block" />

@@ -24,24 +24,26 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
   };
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/90 shadow-xl overflow-hidden">
-      <div className="flex items-center justify-between border-b border-slate-800 px-5 py-3.5 bg-slate-950/60">
-        <div className="flex items-center gap-2.5">
-          <FileText className="h-4 w-4 text-cyan-400" />
-          <span className="text-sm font-semibold text-white">{title}</span>
-          <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-300">
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+      <div className="flex items-center justify-between border-b border-slate-200 px-6 py-3.5 bg-slate-50">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-sky-100 text-sky-700">
+            <FileText className="h-4 w-4" />
+          </div>
+          <span className="text-sm font-semibold text-slate-900">{title}</span>
+          <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-medium text-sky-800">
             {modeLabel}
           </span>
         </div>
 
         <button
           onClick={copyToClipboard}
-          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition"
+          className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-sky-700 hover:bg-slate-100 transition"
         >
           {copied ? (
             <>
-              <Check className="h-3.5 w-3.5 text-emerald-400" />
-              <span className="text-emerald-400">Đã sao chép</span>
+              <Check className="h-3.5 w-3.5 text-emerald-600" />
+              <span className="text-emerald-600 font-medium">Đã sao chép</span>
             </>
           ) : (
             <>
@@ -52,7 +54,7 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
         </button>
       </div>
 
-      <div className="p-6 overflow-x-auto">
+      <div className="p-6 overflow-x-auto text-slate-800">
         <MarkdownRenderer content={report} />
       </div>
     </div>

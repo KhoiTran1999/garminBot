@@ -1,12 +1,20 @@
 import type { Metadata, Viewport } from "next";
+import { Roboto } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { PWAInstaller } from "@/components/PWAInstaller";
 
+const roboto = Roboto({
+  weight: ["300", "400", "500", "700"],
+  subsets: ["latin", "vietnamese"],
+  display: "swap",
+  variable: "--font-roboto",
+});
+
 export const viewport: Viewport = {
-  themeColor: "#090d16",
+  themeColor: "#f8f9fc",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -20,7 +28,7 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
     title: "Garmin Coach",
   },
   icons: {
@@ -40,11 +48,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" className="dark">
+    <html lang="vi" className={roboto.variable}>
       <head>
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
       </head>
-      <body className="bg-slate-950 text-slate-100 min-h-[100dvh] h-[100dvh] antialiased flex flex-col overflow-hidden">
+      <body className="font-sans bg-[#f8f9fc] text-slate-900 min-h-[100dvh] h-[100dvh] antialiased flex flex-col overflow-hidden">
         <AuthProvider>
           <Navbar />
           <main className="flex-1 w-full flex flex-col min-h-0 overflow-y-auto">

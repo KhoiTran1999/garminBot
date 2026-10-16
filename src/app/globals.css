@@ -3,106 +3,98 @@
 @tailwind utilities;
 
 :root {
-  --background: #090d16;
-  --foreground: #f1f5f9;
-  --card-bg: #111827;
-  --card-border: #1f293d;
-  --accent-cyan: #00f0ff;
-  --accent-teal: #10b981;
-  --accent-orange: #f97316;
+  /* Material Design 3 (M3) Baseline Light Theme (Sáng sủa, hiện đại) */
+  --md-sys-color-primary: #00639b;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #d1e4ff;
+  --md-sys-color-on-primary-container: #001d36;
+
+  --md-sys-color-secondary: #51606f;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #d5e4f7;
+  --md-sys-color-on-secondary-container: #0e1d2a;
+
+  --md-sys-color-tertiary: #68587a;
+  --md-sys-color-on-tertiary: #ffffff;
+  --md-sys-color-tertiary-container: #eedbff;
+  --md-sys-color-on-tertiary-container: #231533;
+
+  --md-sys-color-error: #ba1a1a;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #ffdad6;
+  --md-sys-color-on-error-container: #410002;
+
+  --md-sys-color-background: #f8f9fc;
+  --md-sys-color-on-background: #191c1e;
+
+  --md-sys-color-surface: #f8f9fc;
+  --md-sys-color-surface-dim: #d8dadf;
+  --md-sys-color-surface-bright: #f8f9fc;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #f2f4f8;
+  --md-sys-color-surface-container: #eceef3;
+  --md-sys-color-surface-container-high: #e6e8ed;
+  --md-sys-color-surface-container-highest: #e0e2e7;
+
+  --md-sys-color-on-surface: #191c1e;
+  --md-sys-color-on-surface-variant: #43474e;
+  --md-sys-color-outline: #73777f;
+  --md-sys-color-outline-variant: #e2e8f0;
+
+  --background: var(--md-sys-color-background);
+  --foreground: var(--md-sys-color-on-background);
 }
 
 body {
-  color: var(--foreground);
-  background: radial-gradient(circle at 50% 0%, #0d1627 0%, #080c14 60%, #05080f 100%);
-  background-attachment: fixed;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: var(--md-sys-color-on-background);
+  background-color: var(--md-sys-color-background);
+  font-family: var(--font-roboto), Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom scrollbars */
+/* Material Design 3 Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #090d16;
+  background: #f1f5f9;
 }
 ::-webkit-scrollbar-thumb {
-  background: #22304d;
+  background: #cbd5e1;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #374b73;
+  background: #94a3b8;
 }
 
-/* Glass & Card effects */
-.card-glass {
-  background: rgba(17, 24, 39, 0.85);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+/* M3 State Layer & Ripple emulation */
+.m3-state-layer {
+  position: relative;
+  overflow: hidden;
+}
+.m3-state-layer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: currentColor;
+  opacity: 0;
+  transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
+  pointer-events: none;
+}
+.m3-state-layer:hover::after {
+  opacity: 0.08;
+}
+.m3-state-layer:active::after {
+  opacity: 0.12;
 }
 
-.glow-cyan {
-  box-shadow: 0 0 25px rgba(0, 240, 255, 0.15);
-}
-
-.glow-orange {
-  box-shadow: 0 0 25px rgba(249, 115, 22, 0.15);
-}
-
-/* Markdown styling inside reports */
-.markdown-content h1,
-.markdown-content h2,
-.markdown-content h3 {
-  color: #38bdf8;
-  font-weight: 700;
-  margin-top: 1.25rem;
-  margin-bottom: 0.5rem;
-}
-
-.markdown-content h1 { font-size: 1.35rem; border-bottom: 1px solid #1e293b; padding-bottom: 0.4rem; }
-.markdown-content h2 { font-size: 1.2rem; }
-.markdown-content h3 { font-size: 1.05rem; }
-
-.markdown-content p {
-  margin-bottom: 0.75rem;
-  line-height: 1.6;
-  color: #cbd5e1;
-}
-
-.markdown-content ul {
-  list-style-type: disc;
-  margin-left: 1.5rem;
-  margin-bottom: 0.75rem;
-  color: #cbd5e1;
-}
-
-.markdown-content li {
-  margin-bottom: 0.35rem;
-}
-
-.markdown-content strong {
-  color: #f8fafc;
-  font-weight: 600;
-}
-
-.markdown-content blockquote {
-  border-left: 4px solid #00f0ff;
-  padding-left: 1rem;
-  margin: 1rem 0;
-  color: #94a3b8;
-  background: rgba(0, 240, 255, 0.04);
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
-  border-radius: 0 0.375rem 0.375rem 0;
-}
-
-/* Safe area padding utilities for Dynamic Island & Home indicator */
+/* Safe area padding utilities */
 .pt-safe {
   padding-top: env(safe-area-inset-top, 0px);
 }
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
-

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
@@ -24,6 +25,11 @@ export const Navbar: React.FC = () => {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   if (pathname === "/login") return null;
 
@@ -44,41 +50,129 @@ export const Navbar: React.FC = () => {
     setTimeout(() => setSyncing(false), 2000);
   };
 
+  const mobileDrawer = (
+    <div className="fixed inset-0 z-50 flex">
+      <div 
+        onClick={() => setMobileMenuOpen(false)} 
+        className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity" 
+      />
+      <div 
+        className="relative w-72 max-w-[85vw] bg-white border-r border-slate-200 rounded-r-[28px] p-5 flex flex-col shadow-2xl z-10 pt-safe pb-safe"
+        style={{ 
+          paddingTop: "max(1.5rem, env(safe-area-inset-top, 0px))", 
+          paddingBottom: "max(1.5rem, env(safe-area-inset-bottom, 0px))" 
+        }}
+      >
+        {/* Header Drawer */}
+        <div className="flex items-center justify-between pb-4 mb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+              <Activity className="h-5 w-5" />
+            </div>
+            <div>
+              <span className="text-sm font-bold text-slate-900 block leading-none">Garmin AI Coach</span>
+              <span className="text-[10px] text-slate-500 font-medium">Material Design 3</span>
+            </div>
+          </div>
+          <button
+            onClick={() => setMobileMenuOpen(false)}
+            className="h-8 w-8 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Navigation Destinations */}
+        <div className="flex-1 space-y-1.5 overflow-y-auto py-2">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileMenuOpen(false)}
+                className={`flex items-center gap-3.5 px-4 py-3 rounded-full text-sm font-medium transition-colors ${
+                  isActive
+                    ? "bg-sky-100 text-sky-900 font-semibold shadow-xs"
+                    : "text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+                }`}
+              >
+                <Icon className={`h-5 w-5 ${isActive ? "text-sky-600" : "text-slate-500"}`} />
+                {item.name}
+              </Link>
+            );
+          })}
+
+          <div className="pt-3">
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                window.dispatchEvent(new CustomEvent("open-pwa-install"));
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-full text-sm font-medium text-sky-800 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition"
+            >
+              <Download className="h-5 w-5 text-sky-600" />
+              <span>Cài đặt Ứng dụng (App)</span>
+            </button>
+          </div>
+        </div>
+
+        {user && (
+          <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+            <div className="truncate pr-2">
+              <p className="text-xs font-semibold text-slate-900 truncate">{user.name}</p>
+              <p className="text-[10px] text-slate-500 truncate">{user.email}</p>
+            </div>
+            <button
+              onClick={logout}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 transition shrink-0"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Đăng xuất
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <nav 
-      className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/95 backdrop-blur-md pt-safe"
+      className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs pt-safe"
       style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-14 sm:h-16 items-center justify-between gap-3">
-          {/* Logo & History toggle on Chat */}
-          <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="flex h-16 items-center justify-between gap-3">
+          {/* Logo & History Toggle on Chat */}
+          <div className="flex items-center gap-2 sm:gap-3">
             {isChatPage && (
               <button
                 onClick={() => window.dispatchEvent(new CustomEvent("toggle-chat-history"))}
                 title="Lịch sử hội thoại"
-                className="p-2 rounded-xl border border-slate-800 bg-slate-900/90 text-cyan-400 hover:text-white hover:bg-slate-800 transition shadow-xs"
+                className="h-10 w-10 rounded-full flex items-center justify-center text-sky-700 hover:bg-sky-50 active:bg-sky-100 transition-colors"
+                aria-label="Lịch sử trò chuyện"
               >
-                <History className="h-4 w-4" />
+                <History className="h-5 w-5" />
               </button>
             )}
 
-            <Link href="/" className="flex items-center gap-2 group">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 shadow-md shadow-cyan-500/20 group-hover:scale-105 transition-transform">
-                <Activity className="h-4 w-4 text-white" />
+            <Link href="/" className="flex items-center gap-2.5 group">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-600 text-white shadow-xs group-hover:scale-105 transition-transform">
+                <Activity className="h-5 w-5" />
               </div>
               <div className="flex flex-col">
-                <span className="text-sm sm:text-base font-bold tracking-tight text-white flex items-center gap-1.5 leading-none">
-                  GARMIN <span className="text-cyan-400 font-extrabold">AI COACH</span>
-                  <span className="hidden sm:inline rounded bg-cyan-950 px-1 py-0.5 text-[9px] font-semibold text-cyan-400 border border-cyan-800">PRO</span>
+                <span className="text-sm sm:text-base font-bold tracking-tight text-slate-900 flex items-center gap-1.5 leading-none">
+                  GARMIN <span className="text-sky-600 font-extrabold">AI COACH</span>
+                  <span className="hidden sm:inline rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800">PRO</span>
                 </span>
-                <span className="hidden sm:block text-[9px] text-slate-400 tracking-wider mt-0.5">NOTION & VERCEL POWERED</span>
+                <span className="hidden sm:block text-[9px] text-slate-500 tracking-wider mt-0.5">NOTION & VERCEL POWERED</span>
               </div>
             </Link>
           </div>
 
-          {/* Desktop Nav Items */}
-          <div className="hidden lg:flex lg:items-center lg:space-x-1">
+          {/* Desktop Nav Items (Material 3 Navigation Bar pills) */}
+          <div className="hidden lg:flex lg:items-center lg:space-x-1.5">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;
@@ -86,13 +180,13 @@ export const Navbar: React.FC = () => {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-medium transition-all ${
                     isActive
-                      ? "bg-slate-800 text-cyan-400 border border-slate-700/80 shadow-sm"
-                      : "text-slate-300 hover:bg-slate-900 hover:text-white"
+                      ? "bg-sky-100 text-sky-900 font-semibold shadow-xs"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                   }`}
                 >
-                  <Icon className={`h-3.5 w-3.5 ${isActive ? "text-cyan-400" : "text-slate-400"}`} />
+                  <Icon className={`h-4 w-4 ${isActive ? "text-sky-600" : "text-slate-500"}`} />
                   {item.name}
                 </Link>
               );
@@ -106,11 +200,11 @@ export const Navbar: React.FC = () => {
               <button
                 onClick={handleSyncClick}
                 title="Kiểm tra đồng bộ Garmin"
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-800 text-[11px] text-slate-300 hover:text-white transition"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs text-slate-700 transition"
               >
-                <RefreshCw className={`h-3.5 w-3.5 text-cyan-400 ${syncing ? "animate-spin" : ""}`} />
-                <span className="hidden md:inline">Đồng bộ</span>
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <RefreshCw className={`h-3.5 w-3.5 text-sky-600 ${syncing ? "animate-spin" : ""}`} />
+                <span className="hidden md:inline font-medium">Đồng bộ</span>
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
               </button>
             )}
 
@@ -118,34 +212,35 @@ export const Navbar: React.FC = () => {
             <button
               onClick={() => window.dispatchEvent(new CustomEvent("open-pwa-install"))}
               title="Cài đặt App vào điện thoại / máy tính"
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-cyan-500/30 bg-cyan-950/40 text-cyan-300 hover:text-white hover:bg-cyan-900/50 text-xs font-medium transition shadow-sm"
+              className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-sky-50 text-sky-800 border border-sky-200 hover:bg-sky-100 text-xs font-medium transition shadow-xs"
             >
-              <Download className="h-3.5 w-3.5" />
+              <Download className="h-4 w-4 text-sky-600" />
               <span>Cài đặt App</span>
             </button>
 
             {user && (
-              <div className="hidden md:flex items-center gap-2.5 pl-2 border-l border-slate-800">
-                <Link href="/profile" className="text-right hover:opacity-80 transition">
-                  <p className="text-xs font-semibold text-white leading-tight">{user.name}</p>
-                  <p className="text-[10px] text-cyan-400 max-w-[120px] truncate leading-tight">{user.goal || "Chạy bộ"}</p>
+              <div className="hidden md:flex items-center gap-2.5 pl-2 border-l border-slate-200">
+                <Link href="/profile" className="text-right hover:opacity-85 transition">
+                  <p className="text-xs font-semibold text-slate-900 leading-tight">{user.name}</p>
+                  <p className="text-[10px] text-sky-600 max-w-[120px] truncate leading-tight font-medium">{user.goal || "Chạy bộ"}</p>
                 </Link>
                 <button
                   onClick={logout}
                   title="Đăng xuất"
-                  className="rounded-lg p-2 text-slate-400 hover:bg-red-950/40 hover:text-red-400 border border-slate-800 transition-colors"
+                  className="h-9 w-9 rounded-full flex items-center justify-center text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
                 >
-                  <LogOut className="h-3.5 w-3.5" />
+                  <LogOut className="h-4 w-4" />
                 </button>
               </div>
             )}
 
-            {/* Mobile hamburger */}
+            {/* Mobile hamburger icon button */}
             <div className="flex lg:hidden">
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="rounded-xl p-2 text-slate-400 hover:bg-slate-900 hover:text-white border border-slate-800/80 transition"
+                className="h-10 w-10 rounded-full flex items-center justify-center text-slate-700 hover:bg-slate-100 transition"
                 title="Menu"
+                aria-label="Menu điều hướng"
               >
                 {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </button>
@@ -154,57 +249,8 @@ export const Navbar: React.FC = () => {
         </div>
       </div>
 
-      {/* Mobile Menu Dropdown */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden border-b border-slate-800 bg-slate-950 px-3 pt-2 pb-4 space-y-1">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium ${
-                  isActive
-                    ? "bg-slate-800 text-cyan-400 border border-slate-700"
-                    : "text-slate-300 hover:bg-slate-900 hover:text-white"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {item.name}
-              </Link>
-            );
-          })}
-
-          {/* Nút Cài đặt App trên mobile */}
-          <button
-            onClick={() => {
-              setMobileMenuOpen(false);
-              window.dispatchEvent(new CustomEvent("open-pwa-install"));
-            }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-semibold text-cyan-300 bg-cyan-950/40 border border-cyan-850/50 hover:bg-cyan-900/50 transition"
-          >
-            <Download className="h-4 w-4 text-cyan-400" />
-            <span>Cài đặt Ứng dụng (App)</span>
-          </button>
-          {user && (
-            <div className="pt-2.5 mt-2 border-t border-slate-800 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-white">{user.name}</p>
-                <p className="text-[10px] text-slate-400">{user.email}</p>
-              </div>
-              <button
-                onClick={logout}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-red-400 bg-red-950/40 border border-red-900/50"
-              >
-                <LogOut className="h-3 w-3" />
-                Đăng xuất
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Render drawer via Portal to prevent any backdrop-filter containing block trap */}
+      {mounted && mobileMenuOpen && createPortal(mobileDrawer, document.body)}
     </nav>
   );
 };

@@ -35,16 +35,16 @@ export default function BatteryPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+    <div className="space-y-6 max-w-4xl mx-auto px-4 sm:px-6 py-6">
+      {/* Header Material Design 3 Light */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+        <div className="flex items-center gap-3.5">
+          <div className="p-3 rounded-2xl bg-emerald-100 text-emerald-700 shrink-0">
             <BatteryCharging className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">Bắt mạch Pin Năng Lượng & Stress</h1>
-            <p className="text-xs text-slate-400">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Bắt mạch Pin Năng Lượng & Stress</h1>
+            <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
               Biểu đồ Body Battery & Mức độ Căng thẳng 2 giờ/block, tìm ra thời điểm hao hụt năng lượng
             </p>
           </div>
@@ -53,24 +53,24 @@ export default function BatteryPage() {
         <button
           onClick={handleRun}
           disabled={loading}
-          className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-5 py-2.5 text-xs font-bold text-slate-950 shadow-lg shadow-emerald-500/20 hover:from-emerald-400 hover:to-teal-500 transition disabled:opacity-50"
+          className="flex items-center justify-center gap-2 rounded-full bg-emerald-600 hover:bg-emerald-500 px-6 py-2.5 text-xs font-medium text-white shadow-xs hover:shadow transition disabled:opacity-50 shrink-0 active:scale-98"
         >
           {loading ? (
             <>
-              <RefreshCw className="h-4 w-4 animate-spin text-slate-950" />
+              <RefreshCw className="h-4 w-4 animate-spin text-white" />
               <span>Đang tính toán biểu đồ...</span>
             </>
           ) : (
             <>
-              <Sparkles className="h-4 w-4" />
+              <Sparkles className="h-4 w-4 text-white" />
               <span>Phân tích Năng lượng Hôm nay</span>
             </>
           )}
         </button>
       </div>
 
-      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-        <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <label className="block text-xs font-semibold text-slate-900 mb-2">
           Ghi chú công việc / căng thẳng trong ngày (Tùy chọn):
         </label>
         <input
@@ -78,19 +78,19 @@ export default function BatteryPage() {
           value={userNote}
           onChange={(e) => setUserNote(e.target.value)}
           placeholder="Ví dụ: Buổi chiều họp căng thẳng 3 tiếng, hoặc: Uống 2 cốc cà phê đậm lúc 14h..."
-          className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-4 py-2 text-xs text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+          className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition"
         />
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-800 bg-red-950/40 p-4 text-xs text-red-300 flex items-center gap-3">
-          <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
-          <span>{error}</span>
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-700 flex items-center gap-3">
+          <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+          <span className="font-medium">{error}</span>
         </div>
       )}
 
       {result ? (
-        <div className="space-y-4">
+        <div className="space-y-5">
           {result.audio_url && (
             <AudioPlayer src={result.audio_url} title="Voice Coach - Pin & Căng thẳng" />
           )}
@@ -101,9 +101,9 @@ export default function BatteryPage() {
           />
         </div>
       ) : cachedReport ? (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-900/40 p-3 rounded-lg border border-slate-800">
-            <Info className="h-4 w-4 text-emerald-400 shrink-0" />
+        <div className="space-y-5">
+          <div className="flex items-center gap-2.5 text-xs text-slate-700 bg-emerald-50 p-3.5 rounded-2xl border border-emerald-100">
+            <Info className="h-4 w-4 text-emerald-600 shrink-0" />
             <span>Hiển thị phân tích năng lượng gần nhất đã lưu.</span>
           </div>
           <ReportViewer 
@@ -113,10 +113,10 @@ export default function BatteryPage() {
           />
         </div>
       ) : (
-        <div className="rounded-2xl border border-slate-800/80 bg-slate-900/30 p-12 text-center text-slate-400">
-          <BatteryCharging className="h-10 w-10 mx-auto text-slate-600 mb-3" />
-          <p className="text-sm font-medium text-slate-300">Chưa có phân tích pin năng lượng hôm nay</p>
-          <p className="text-xs text-slate-500 mt-1">Bấm nút phía trên để AI rút gọn biểu đồ Body Battery và bắt mạch xu hướng năng lượng của bạn.</p>
+        <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center text-slate-500 shadow-xs">
+          <BatteryCharging className="h-12 w-12 mx-auto text-slate-300 mb-3" />
+          <p className="text-sm font-semibold text-slate-800">Chưa có phân tích pin năng lượng hôm nay</p>
+          <p className="text-xs text-slate-500 mt-1.5 max-w-sm mx-auto">Bấm nút phía trên để AI rút gọn biểu đồ Body Battery và bắt mạch xu hướng năng lượng của bạn.</p>
         </div>
       )}
     </div>

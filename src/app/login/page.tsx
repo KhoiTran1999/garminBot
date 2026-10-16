@@ -18,7 +18,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Nếu người dùng đã đăng nhập thì tự động chuyển về trang chính
   useEffect(() => {
     if (user) {
       router.push("/");
@@ -47,37 +46,37 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-[80vh] items-center justify-center">
+    <div className="flex min-h-[80vh] items-center justify-center px-4 py-8">
       <div className="w-full max-w-md">
-        {/* Branding header */}
+        {/* Branding header Material Design 3 Light */}
         <div className="text-center mb-8">
-          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 shadow-xl shadow-cyan-500/20 mb-4">
-            <Activity className="h-8 w-8 text-white" />
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-sky-600 text-white shadow-md shadow-sky-600/20 mb-4">
+            <Activity className="h-8 w-8" />
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
-            GARMIN <span className="text-cyan-400">AI COACH</span> PRO
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            GARMIN <span className="text-sky-600">AI COACH</span> PRO
           </h1>
-          <p className="mt-2 text-xs text-slate-400">
+          <p className="mt-2 text-xs sm:text-sm text-slate-600">
             Đăng nhập bằng tài khoản Vận động viên đã cấu hình trên Notion
           </p>
         </div>
 
         {/* Login form card */}
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-8 shadow-2xl backdrop-blur-xl">
+        <div className="rounded-[28px] border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/50">
           {error && (
-            <div className="mb-6 flex items-start gap-3 rounded-lg border border-red-800/80 bg-red-950/40 p-3.5 text-xs text-red-300">
-              <AlertCircle className="h-4 w-4 shrink-0 text-red-400 mt-0.5" />
-              <span>{error}</span>
+            <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-3.5 text-xs text-red-700">
+              <AlertCircle className="h-4 w-4 shrink-0 text-red-600 mt-0.5" />
+              <span className="font-medium">{error}</span>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-2">
+              <label className="block text-xs font-semibold text-slate-800 mb-2">
                 Email tài khoản Garmin
               </label>
               <div className="relative">
-                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
                   <Mail className="h-4 w-4" />
                 </div>
                 <input
@@ -86,17 +85,17 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="runner@example.com"
                   required
-                  className="w-full rounded-xl border border-slate-800 bg-slate-950/70 py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                  className="w-full rounded-xl border border-slate-300 bg-slate-50 py-3 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 transition"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-2">
+              <label className="block text-xs font-semibold text-slate-800 mb-2">
                 Mật khẩu Garmin (hoặc Web Password)
               </label>
               <div className="relative">
-                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
                   <Lock className="h-4 w-4" />
                 </div>
                 <input
@@ -105,7 +104,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full rounded-xl border border-slate-800 bg-slate-950/70 py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                  className="w-full rounded-xl border border-slate-300 bg-slate-50 py-3 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 transition"
                 />
               </div>
             </div>
@@ -113,11 +112,11 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-cyan-500/25 hover:from-cyan-400 hover:to-blue-500 transition-all disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 rounded-full bg-sky-600 hover:bg-sky-500 py-3.5 text-sm font-medium text-white shadow-xs hover:shadow transition-all disabled:opacity-50 active:scale-[0.99]"
             >
               {loading ? (
                 <>
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" />
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                   <span>Đang xác thực tài khoản...</span>
                 </>
               ) : (
@@ -129,9 +128,9 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-6 border-t border-slate-800 pt-5 text-center">
-            <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+          <div className="mt-6 border-t border-slate-100 pt-5 text-center">
+            <div className="flex items-center justify-center gap-1.5 text-xs text-slate-500">
+              <ShieldCheck className="h-4 w-4 text-emerald-600" />
               <span>Dữ liệu được bảo mật và xác thực trực tiếp qua Notion DB</span>
             </div>
           </div>

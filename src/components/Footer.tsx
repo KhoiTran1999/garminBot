@@ -12,8 +12,8 @@ export const Footer: React.FC = () => {
   }
 
   return (
-    <footer className="border-t border-slate-900 py-6 text-center text-xs text-slate-400 shrink-0">
-      <p>Garmin AI Coach Pro • Vercel & Notion Integrated</p>
+    <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-500 shrink-0 bg-white">
+      <p>Garmin AI Coach Pro • Vercel & Notion Integrated • Material Design 3</p>
     </footer>
   );
 };

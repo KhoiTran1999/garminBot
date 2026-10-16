@@ -11,7 +11,7 @@ export default function ChatRedirectPage() {
   }, [router]);
 
   return (
-    <div className="flex items-center justify-center min-h-[50vh] text-slate-400 text-xs">
+    <div className="flex items-center justify-center min-h-[50vh] text-slate-500 text-xs font-medium">
       Đang chuyển tiếp về phòng Chat chính...
     </div>
   );
