@@ -5,6 +5,17 @@ from backend.utils.metrics import calculate_readiness_score, calculate_trimp_ban
 # Cấu hình cửa sổ quét (7 ngày cho Acute Load)
 DAYS_WINDOW = 7
 
+def _normalize_timestamp(value):
+    """Return a positive Unix timestamp from Garmin seconds or milliseconds."""
+    try:
+        timestamp = float(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+    if timestamp <= 0:
+        return 0
+    return timestamp / 1000 if timestamp > 10_000_000_000 else timestamp
+
 def get_time_series_stress_bb(client, date_iso, activities, user_label="User"):
     """
     Rút gọn biểu đồ Stress và Body Battery thành các block 2h để tiết kiệm token cho AI,
@@ -112,8 +123,7 @@ def check_garmin_sync_status(client, max_age_hours=1.0, user_label="User"):
     try:
         last_used = client.get_device_last_used()
         if last_used:
-            last_sync_ts = last_used.get("lastUsedDeviceUploadTime", 0)
-            if last_sync_ts > 0: last_sync_ts = last_sync_ts / 1000
+            last_sync_ts = _normalize_timestamp(last_used.get("lastUsedDeviceUploadTime"))
             device_name = last_used.get("lastUsedDeviceName") or last_used.get("deviceName")
             source = "LastUsed"
     except Exception as e:
@@ -124,8 +134,7 @@ def check_garmin_sync_status(client, max_age_hours=1.0, user_label="User"):
         try:
             today_iso = date.today().isoformat()
             summary = client.get_user_summary(today_iso)
-            last_sync_ts = summary.get("lastSyncTimestampGMT", 0)
-            if last_sync_ts > 0: last_sync_ts = last_sync_ts / 1000
+            last_sync_ts = _normalize_timestamp(summary.get("lastSyncTimestampGMT"))
             source = "UserSummary"
         except Exception:
             pass

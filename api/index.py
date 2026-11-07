@@ -53,6 +53,10 @@ JWT_EXPIRATION_DAYS = 60
 
 # Trên Vercel Serverless, hệ thống file /var/task là read-only.
 # Chỉ có /tmp (tempfile.gettempdir()) là có quyền ghi.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(errors="backslashreplace")
+
 AUDIO_DIR = os.path.join(tempfile.gettempdir(), "audio")
 try:
     os.makedirs(AUDIO_DIR, exist_ok=True)
@@ -104,12 +108,13 @@ def create_access_token(data: dict) -> str:
     return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
-    if not authorization or not authorization.startswith("Bearer "):
+    auth_parts = authorization.split(None, 1) if authorization else []
+    if len(auth_parts) != 2 or auth_parts[0].lower() != "bearer" or not auth_parts[1].strip():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Yêu cầu đăng nhập (Thiếu Bearer Token)"
         )
-    token = authorization.split(" ")[1]
+    token = auth_parts[1].strip()
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         email = payload.get("sub")

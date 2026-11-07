@@ -1,6 +1,7 @@
 import os
 import asyncio
 import argparse
+import sys
 from datetime import date
 import time
 import logging
@@ -25,6 +26,10 @@ from backend.services.prompt_service import get_prompts_from_notion
 from backend.services.weather_service import WeatherService
 from backend.services.redis_service import redis_service
 from backend.config import Config
+
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(errors="backslashreplace")
 
 
 def login_garmin(email, password, name):
@@ -447,7 +452,11 @@ async def main():
                 print(f"Unknown mode: {mode}")
                 return
 
-        await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for user, result in zip(users, results):
+            if isinstance(result, Exception):
+                user_label = user.get("name", user.get("email", "Unknown")) if isinstance(user, dict) else "Unknown"
+                print(f"[{user_label}] ❌ Task failed without stopping the remaining users: {result}")
         print("\n=== COMPLETE ===")
 
     except Exception as e:
