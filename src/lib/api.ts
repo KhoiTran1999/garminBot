@@ -265,45 +265,72 @@ export const api = {
     const decoder = new TextDecoder("utf-8");
     let accumulatedText = "";
     let buffer = "";
+    let doneReceived = false;
+    let errorReported = false;
+
+    const processEvent = (event: string) => {
+      const dataLines = event
+        .split(/\r?\n/)
+        .filter((line) => line.trim().startsWith("data:"))
+        .map((line) => line.replace(/^data:\s*/, "").trim());
+      if (dataLines.length === 0) return;
+
+      const dataStr = dataLines.join("\n");
+      let parsed: {
+        type?: "status" | "chunk" | "done" | "error";
+        message?: string;
+        text?: string;
+        reply?: string;
+      };
+      try {
+        parsed = JSON.parse(dataStr);
+      } catch (parseErr) {
+        console.warn("Lỗi phân tích cú pháp SSE:", parseErr, dataStr);
+        return;
+      }
+
+      if (parsed.type === "status") {
+        onStatus?.(parsed.message || "");
+      } else if (parsed.type === "chunk") {
+        const text = parsed.text || "";
+        accumulatedText += text;
+        onChunk?.(text);
+      } else if (parsed.type === "done") {
+        doneReceived = true;
+        onDone?.(parsed.reply || accumulatedText);
+      } else if (parsed.type === "error") {
+        const message = parsed.message || "Lỗi xử lý phản hồi từ AI.";
+        errorReported = true;
+        onError?.(message);
+        throw new Error(message);
+      }
+    };
 
     try {
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          buffer += decoder.decode();
+          break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
+        const parts = buffer.split(/\r?\n\r?\n/);
         buffer = parts.pop() || "";
+        for (const part of parts) processEvent(part);
+      }
 
-        for (const part of parts) {
-          const lines = part.split("\n");
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith("data:")) {
-              const dataStr = trimmed.replace(/^data:\s*/, "").trim();
-              if (!dataStr) continue;
-              try {
-                const parsed = JSON.parse(dataStr);
-                if (parsed.type === "status") {
-                  if (onStatus) onStatus(parsed.message);
-                } else if (parsed.type === "chunk") {
-                  accumulatedText += parsed.text;
-                  if (onChunk) onChunk(parsed.text);
-                } else if (parsed.type === "done") {
-                  if (onDone) onDone(parsed.reply || accumulatedText);
-                } else if (parsed.type === "error") {
-                  if (onError) onError(parsed.message);
-                  throw new Error(parsed.message);
-                }
-              } catch (parseErr) {
-                console.warn("Lỗi phân tích cú pháp SSE:", parseErr, dataStr);
-              }
-            }
-          }
-        }
+      // Some proxies close the response without the final blank line.
+      if (buffer.trim()) processEvent(buffer);
+      if (!doneReceived) {
+        throw new Error(
+          accumulatedText
+            ? "Luồng phản hồi AI kết thúc bất thường trước khi hoàn tất."
+            : "AI không trả về kết quả."
+        );
       }
     } catch (streamErr: any) {
-      if (onError) onError(streamErr.message);
+      if (!errorReported) onError?.(streamErr.message);
       throw streamErr;
     }
 

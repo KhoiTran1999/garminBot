@@ -2309,21 +2309,22 @@ YÊU CẦU:
                         if idx not in tool_calls_dict:
                             tool_calls_dict[idx] = {
                                 "id": tc.id or f"call_{idx}",
-                                "name": tc.function.name or "",
-                                "arguments": tc.function.arguments or ""
+                                "name": tc.function.name if tc.function and tc.function.name else "",
+                                "arguments": tc.function.arguments if tc.function and tc.function.arguments else ""
                             }
                         else:
                             if tc.id:
                                 tool_calls_dict[idx]["id"] += tc.id
-                            if tc.function.name:
+                            if tc.function and tc.function.name:
                                 tool_calls_dict[idx]["name"] += tc.function.name
-                            if tc.function.arguments:
+                            if tc.function and tc.function.arguments:
                                 tool_calls_dict[idx]["arguments"] += tc.function.arguments
 
-                # Trả về chunk nội dung trực tiếp cho user
+                # Buffer nội dung until we know this iteration is not a tool-call turn.
+                # Models can emit text before requesting a tool; sending it immediately
+                # would show duplicate/incomplete text in the client.
                 if delta.content:
                     content_chunks.append(delta.content)
-                    yield {"type": "chunk", "text": delta.content}
 
             # Xử lý khi có tool calls
             if tool_calls_dict:
@@ -2399,8 +2400,11 @@ YÊU CẦU:
                 final_reply = strip_thinking(final_reply)
 
                 if final_reply:
-                    redis_service.save_chat_message(user_id, "user", question, limit=10)
-                    redis_service.save_chat_message(user_id, "assistant", final_reply, limit=10)
+                    for text, role in ((question, "user"), (final_reply, "assistant")):
+                        if not redis_service.save_chat_message(user_id, role, text, limit=10):
+                            print(f"[{user_label}] Warning: không thể lưu tin nhắn {role} vào Redis.")
+                    for chunk_start in range(0, len(final_reply), 1200):
+                        yield {"type": "chunk", "text": final_reply[chunk_start:chunk_start + 1200]}
 
                 yield {"type": "done", "reply": final_reply}
                 return
@@ -2489,4 +2493,3 @@ def route_ask_query(question: str, current_date_str: str) -> dict:
     except Exception as e:
         print(f"⚠️ Error in route_ask_query: {e}")
         return default_res
-

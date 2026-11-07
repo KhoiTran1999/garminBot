@@ -1,5 +1,6 @@
 import redis
 import logging
+import time
 from backend.config import Config
 
 logger = logging.getLogger(__name__)
@@ -9,38 +10,52 @@ class RedisService:
         self.redis_url = Config.REDIS_URL
         self._client = None
         self._connection_failed = False
+        self._last_connection_attempt = 0.0
         if not self.redis_url:
             logger.warning("⚠️ REDIS_URL not configured. Redis service will be bypassed (fail-safe).")
             self._connection_failed = True
         else:
-            try:
-                # Initialize Redis client. Use socket_timeout to fail fast.
-                self._client = redis.Redis.from_url(
-                    self.redis_url,
-                    decode_responses=True,
-                    socket_timeout=5.0,
-                    socket_connect_timeout=5.0
-                )
-                # Test connection
-                self._client.ping()
-                logger.info("✅ Redis connected successfully.")
-            except Exception as e:
-                logger.error(f"❌ Failed to connect to Redis at {self.redis_url}: {e}")
-                self._client = None
-                self._connection_failed = True
+            self._connect()
+
+    def _connect(self) -> bool:
+        if not self.redis_url:
+            return False
+        self._last_connection_attempt = time.monotonic()
+        try:
+            self._client = redis.Redis.from_url(
+                self.redis_url,
+                decode_responses=True,
+                socket_timeout=5.0,
+                socket_connect_timeout=5.0
+            )
+            self._client.ping()
+            self._connection_failed = False
+            logger.info("✅ Redis connected successfully.")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Failed to connect to Redis at {self.redis_url}: {e}")
+            self._client = None
+            self._connection_failed = True
+            return False
 
     def _execute(self, func, default_return, *args, **kwargs):
         """
         Helper method to execute a Redis command with fail-safe behavior.
         """
         if self._connection_failed or not self._client:
-            return default_return
+            # A transient startup/network failure must not permanently disable
+            # persistence for the lifetime of a serverless worker.
+            if time.monotonic() - self._last_connection_attempt < 5:
+                return default_return
+            if not self._connect():
+                return default_return
 
         try:
             return func(*args, **kwargs)
         except Exception as e:
             logger.error(f"⚠️ Redis command failed: {e}. Bypassing Redis.")
-            # Mark connection failed temporarily so subsequent requests don't hang
+            self._connection_failed = True
+            self._client = None
             return default_return
 
     def check_and_set_dedup(self, user_id: str, date_str: str, mode: str) -> bool:
@@ -280,4 +295,3 @@ class RedisService:
 
 # Initialize a global Redis service instance
 redis_service = RedisService()
-
