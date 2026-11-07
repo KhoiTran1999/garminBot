@@ -253,7 +253,7 @@ export default function ChatFirstPage() {
     setLoading(true);
     setChatStatus("HLV AI đang thu thập dữ liệu Garmin, phân tích và tạo Voice Script...");
     try {
-      const result: AnalysisResult = await api.runAnalysis(mode);
+      const result: AnalysisResult = await api.runAnalysis(mode, undefined, false);
       setMessages((prev) => [
         ...prev,
         {

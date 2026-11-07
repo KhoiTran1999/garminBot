@@ -77,6 +77,7 @@ class LoginRequest(BaseModel):
 class RunAnalysisRequest(BaseModel):
     mode: str  # daily | sleep_analysis | workout | battery
     user_note: Optional[str] = None
+    generate_audio: bool = True
 
 class ChatRequest(BaseModel):
     question: str
@@ -333,23 +334,23 @@ async def run_analysis(req: RunAnalysisRequest, user: dict = Depends(get_current
         if ai_report:
             redis_service.save_ai_context(email, mode, ai_report, limit=5)
 
-        # Tạo Voice Script & File Audio WAV
-        audio_filename = f"voice_{name.replace(' ', '_')}_{mode}_{today}.wav"
-        audio_path = os.path.join(AUDIO_DIR, audio_filename)
-        
         has_audio = False
-        try:
-            voice_template = prompts.get("voice_script")
-            speech_script = get_speech_script(ai_report, user, prompt_template=voice_template, mode=mode)
-            has_audio = await generate_audio_from_text(speech_script, audio_path)
-        except Exception as audio_err:
-            print(f"[{name}] ⚠️ Lỗi tạo audio: {audio_err}")
+        audio_filename = None
+        if req.generate_audio:
+            audio_filename = f"voice_{name.replace(' ', '_')}_{mode}_{today}.wav"
+            audio_path = os.path.join(AUDIO_DIR, audio_filename)
+            try:
+                voice_template = prompts.get("voice_script")
+                speech_script = get_speech_script(ai_report, user, prompt_template=voice_template, mode=mode)
+                has_audio = await generate_audio_from_text(speech_script, audio_path)
+            except Exception as audio_err:
+                print(f"[{name}] ⚠️ Lỗi tạo audio: {audio_err}")
 
         return {
             "status": "success",
             "mode": mode,
             "report": ai_report,
-            "audio_url": f"/api/audio/{audio_filename}" if has_audio else None,
+            "audio_url": f"/api/audio/{audio_filename}" if has_audio and audio_filename else None,
             "metrics": {
                 "readiness_score": r_score,
                 "is_fresh": is_fresh,

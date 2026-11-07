@@ -203,10 +203,10 @@ export const api = {
     return fetchWithAuth("/api/garmin/status");
   },
 
-  async runAnalysis(mode: string, userNote?: string): Promise<AnalysisResult> {
+  async runAnalysis(mode: string, userNote?: string, generateAudio = true): Promise<AnalysisResult> {
     return fetchWithAuth("/api/analysis/run", {
       method: "POST",
-      body: JSON.stringify({ mode, user_note: userNote || null }),
+      body: JSON.stringify({ mode, user_note: userNote || null, generate_audio: generateAudio }),
     });
   },
 
