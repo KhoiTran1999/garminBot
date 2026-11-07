@@ -161,12 +161,9 @@ export default function ChatFirstPage() {
     setDrawerOpen(false);
   };
 
-  const handleSelectHistoryItem = (item: ChatMessage) => {
-    setMessages([
-      { role: "user", content: item.content },
-    ]);
+  const handleSelectHistoryItem = () => {
+    setMessages(historyList);
     setDrawerOpen(false);
-    handleSend(item.content);
   };
 
   const handleSend = async (textToSend?: string) => {
@@ -344,7 +341,7 @@ export default function ChatFirstPage() {
               .map((item, idx) => (
                 <div
                   key={idx}
-                  onClick={() => handleSelectHistoryItem(item)}
+                  onClick={handleSelectHistoryItem}
                   className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 hover:bg-slate-100 text-slate-800 cursor-pointer transition flex items-center justify-between gap-2 shadow-2xs"
                 >
                   <div className="flex items-center gap-2.5 truncate flex-1">
